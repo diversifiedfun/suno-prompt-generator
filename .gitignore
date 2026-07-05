@@ -9,3 +9,8 @@ dist/
 
 # Store build artifact (regenerate via store/package.sh)
 store/*.zip
+
+# Local submission prep — keep private, not for the public repo
+store/listing.md
+store/submission-checklist.md
+store/permissions-justifications.md
