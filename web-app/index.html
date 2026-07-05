@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Suno Prompt Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <h1>Suno Prompt Studio</h1>
+        <span class="tag">build great prompts → make great music</span>
+      </div>
+      <div class="subtitle">
+        4-component structure · 4–7 descriptor sweet spot · metatags + voice tags · contradiction guard.
+        Method from the <a href="https://musci.io/blog/suno-prompts" target="_blank" rel="noopener">Musci.io Suno guide</a>.
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- LEFT: component builder -->
+      <section class="panel">
+        <h2><span class="num">01</span> Style Prompt Builder</h2>
+
+        <div class="field">
+          <label>Genre + Era <span class="hint">your foundation — be specific</span></label>
+          <div class="split">
+            <select id="genreSel"></select>
+            <select id="eraSel"></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Mood &amp; Emotion <span class="hint">vibes beat music theory</span></label>
+          <div id="moodChips"></div>
+        </div>
+
+        <div class="field">
+          <label>Instruments &amp; Production <span class="hint">the sonic palette</span></label>
+          <div id="instChips"></div>
+        </div>
+
+        <div class="field">
+          <label>Vocals <span class="hint">put these first — Suno deprioritizes them</span></label>
+          <div id="vocalChips"></div>
+        </div>
+
+        <div class="field">
+          <label>Negative Prompt <span class="hint">what to avoid</span></label>
+          <div id="negChips"></div>
+        </div>
+
+        <div class="field">
+          <label style="cursor:pointer">
+            <span><input type="checkbox" id="sandwichToggle" /> Sandwich method</span>
+            <span class="hint">repeat genre first + last for weighting</span>
+          </label>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn primary" id="surprise">🎲 Surprise me</button>
+          <button class="btn ghost" id="clearAll">Clear</button>
+        </div>
+      </section>
+
+      <!-- RIGHT: live output -->
+      <section class="panel output">
+        <h2><span class="num">02</span> Your Style Prompt</h2>
+        <div class="preview-box empty" id="stylePreview">Pick a genre + a few descriptors to build your style prompt…</div>
+        <div class="meta-row">
+          <span>descriptors <b id="descCount" class="count-ok">0</b> <span style="color:var(--ink-faint)">/ 4–7</span></span>
+          <span>chars <b id="charCount" class="count-ok">0</b> <span style="color:var(--ink-faint)">/ 200</span></span>
+        </div>
+        <div id="warnings"></div>
+        <div class="btn-row">
+          <button class="btn primary" id="copyStyle">Copy style prompt</button>
+        </div>
+      </section>
+
+      <!-- LYRICS -->
+      <section class="panel full">
+        <h2><span class="num">03</span> Lyrics &amp; Structure <span style="color:var(--ink-faint);font-weight:400;text-transform:none;letter-spacing:0">— this goes in Suno's separate lyrics field</span></h2>
+        <div class="split" style="grid-template-columns:1.4fr 1fr;gap:20px;align-items:start">
+          <div>
+            <textarea id="lyrics" placeholder="Click tags to insert at cursor, then write your lyrics…
+
+[Intro]
+(soft piano, building atmosphere)
+
+[Verse]
+Walking through the city at night
+Neon lights reflecting in my eyes
+
+[Chorus: belting, powerful]
+We're alive in the moment"></textarea>
+            <div class="btn-row">
+              <button class="btn primary" id="copyLyrics">Copy lyrics</button>
+            </div>
+          </div>
+          <div>
+            <div class="taglabel">Structure tags</div>
+            <div id="structureTags"></div>
+            <div class="taglabel">Voice tags</div>
+            <div id="voiceTags"></div>
+            <div class="taglabel">Dynamics tags</div>
+            <div id="dynamicsTags"></div>
+            <div class="warn amber" style="margin-top:14px">
+              <span class="ic">i</span>
+              <span>Tip: <code>[Chorus: belting]</code> beats <code>[Chorus]</code> alone. Tags are hit-or-miss — regenerate a few times.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRESET LIBRARY -->
+      <section class="panel full">
+        <h2><span class="num">04</span> Preset Library <span style="color:var(--ink-faint);font-weight:400;text-transform:none;letter-spacing:0">— <span id="presetCount">0</span> tested examples · click to load</span></h2>
+        <div class="preset-controls">
+          <select id="presetGenre"></select>
+          <input type="text" id="presetSearch" placeholder="Search presets (e.g. 'dreamy', 'synthwave', 'heartbreak')…" />
+        </div>
+        <div class="preset-list" id="presetList"></div>
+      </section>
+    </div>
+
+    <div class="foot">
+      Saves to your browser automatically · zero build, fully offline · open <span class="kbd">index.html</span> anytime
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

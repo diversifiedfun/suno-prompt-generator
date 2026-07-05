@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+*.log
+dist/
+
+# Secrets — never commit
+.env
+.env.*
+
+# Store build artifact (regenerate via store/package.sh)
+store/*.zip

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<!-- DEV ONLY preview: runs the real sidepanel UI in a normal tab via the chrome shim.
+     Mirrors ../sidepanel.html exactly. Not part of the shipped extension. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Suno Prompt Studio — DEV preview</title>
+  <link rel="stylesheet" href="../sidepanel.css" />
+  <style>
+    /* Frame the panel at its real ~380px width so the dev view matches reality. */
+    body { max-width: 400px; margin: 0 auto; border-left: 1px solid #262438; border-right: 1px solid #262438; min-height: 100vh; }
+    .dev-banner { background: #2a1430; color: #ff8fc4; font: 11px/1.4 ui-monospace, monospace; padding: 6px 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="dev-banner">DEV PREVIEW — chrome.* shimmed, storage = localStorage. Capture (right-click) is extension-only.</div>
+  <header>
+    <h1>Suno Prompt Studio</h1>
+  </header>
+
+  <nav class="tab-bar" role="tablist" aria-label="Main tabs">
+    <button class="tab-btn active" data-tab="library" role="tab" aria-selected="true" aria-controls="tab-library">Library</button>
+    <button class="tab-btn" data-tab="build" role="tab" aria-selected="false" aria-controls="tab-build">Build</button>
+    <button class="tab-btn" data-tab="generate" role="tab" aria-selected="false" aria-controls="tab-generate">Generate</button>
+    <button class="tab-btn" data-tab="settings" role="tab" aria-selected="false" aria-controls="tab-settings">Settings</button>
+  </nav>
+
+  <main>
+    <section id="tab-library" class="tab-panel" role="tabpanel">
+      <div class="search-row">
+        <input type="text" id="library-search" placeholder="Search prompts…" autocomplete="off" />
+      </div>
+      <div id="library-list" class="prompt-list"></div>
+    </section>
+
+    <section id="tab-build" class="tab-panel hidden" role="tabpanel">
+      <div class="field">
+        <label for="build-genre">Genre</label>
+        <select id="build-genre"></select>
+      </div>
+      <div class="field">
+        <label for="build-era">Era</label>
+        <select id="build-era"></select>
+      </div>
+      <div class="field">
+        <div class="field-label">Mood</div>
+        <div id="build-mood-chips" class="chips"></div>
+      </div>
+      <div class="field">
+        <div class="field-label">Instruments &amp; Production</div>
+        <div id="build-instrument-chips" class="chips"></div>
+      </div>
+      <div class="field">
+        <div class="field-label">Vocals</div>
+        <div id="build-vocal-chips" class="chips"></div>
+      </div>
+
+      <div class="preview-box" id="build-preview"></div>
+      <div class="meta-row" id="build-meta"></div>
+      <div id="build-warnings"></div>
+
+      <div class="btn-row">
+        <button class="btn" id="build-copy-style">Copy style</button>
+        <button class="btn primary" id="build-save">Save to Library</button>
+      </div>
+
+      <div class="field" style="margin-top:18px">
+        <div class="field-label">Lyrics scaffold</div>
+        <div id="build-tag-buttons" class="chips"></div>
+        <textarea id="build-lyrics" rows="7" placeholder="[Intro]&#10;[Verse]&#10;…"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="build-copy-lyrics">Copy lyrics</button>
+      </div>
+    </section>
+
+    <section id="tab-generate" class="tab-panel hidden" role="tabpanel">
+      <div class="field">
+        <label for="gen-input">Describe your vibe or artist reference</label>
+        <textarea id="gen-input" rows="3" placeholder="e.g. late night drive, melancholy…"></textarea>
+      </div>
+      <div class="mode-toggle" role="group" aria-label="Generation mode">
+        <button class="mode-btn active" data-mode="vibe" id="mode-vibe">Vibe</button>
+        <button class="mode-btn" data-mode="artist" id="mode-artist">Artist</button>
+      </div>
+      <div id="gen-artist-note" class="warn amber hidden">
+        <span class="ic">!</span>
+        <span>Artist mode outputs descriptors only — never the artist's name (Suno policy).</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="gen-submit">Generate</button>
+      </div>
+      <div id="gen-loading" class="loading hidden">Generating…</div>
+      <div id="gen-results" class="gen-results hidden"></div>
+    </section>
+
+    <section id="tab-settings" class="tab-panel hidden" role="tabpanel">
+      <div class="field">
+        <label for="settings-apikey">Anthropic API key</label>
+        <input type="password" id="settings-apikey" placeholder="sk-ant-…" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="settings-model">Model</label>
+        <select id="settings-model"></select>
+      </div>
+      <div class="warn amber" style="margin-bottom:14px">
+        <span class="ic">!</span>
+        <span>Your key is stored locally in this browser only and sent only to Anthropic. Don't use on shared computers.</span>
+      </div>
+      <button class="btn primary" id="settings-save">Save settings</button>
+      <div id="settings-status" class="settings-status"></div>
+    </section>
+  </main>
+
+  <!-- shim MUST load (classic, synchronous) before the deferred module -->
+  <script src="chrome-shim.js"></script>
+  <script type="module" src="../sidepanel.js"></script>
+</body>
+</html>

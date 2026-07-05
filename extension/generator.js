@@ -1,0 +1,185 @@
+// generator.js — turns a vibe/feeling or artist/style into a dialed-in Suno prompt.
+// Pure logic, no DOM. Calls the Anthropic API directly from the side panel page
+// (browser access header verified per docs/suno-prompt-learnings.md sources).
+import { ARTIST_TRANSLATIONS, VIBE_SEEDS, GENRE_TRAPS } from "./knowledge.js";
+import { DEFAULT_MODEL } from "./constants.js";
+
+export { DEFAULT_MODEL };
+export const MODELS = [
+  { id: "claude-sonnet-4-6", label: "Sonnet 4.6 — best quality (recommended)" },
+  { id: "claude-haiku-4-5", label: "Haiku 4.5 — faster & cheaper" },
+];
+
+const API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
+
+// The system prompt IS the research catalog, compressed into operating rules.
+export const SYSTEM_PROMPT = `You are a world-class Suno AI music prompt engineer. You turn a user's vibe, feeling, or artist/style reference into a Suno prompt that reliably produces a great song on Suno v4.5/v5.5.
+
+NON-NEGOTIABLE RULES (from tested research):
+1. Two separate fields. STYLE field = genre, era, mood, instruments, tempo, vocal type. LYRICS field = words + [Section] tags. Never mix them.
+2. Genre goes FIRST in the style prompt — leading tokens get the most weight.
+3. Use 6–12 high-signal descriptors. Under 5 = generic; over 15 = the model ignores later tokens and contradicts itself.
+4. ALWAYS anchor a BPM and ALWAYS give a 3-layer vocal spec (character + delivery + effect), unless the song is instrumental.
+5. Era is a production package (1970s=analog warmth, 1980s=gated reverb+drum machines, 2010s=hyper-compression). Pick one deliberately.
+6. Translate FEELINGS into a concrete scene + instrumentation + production texture. Never use empty evaluative words (beautiful, amazing, emotional, powerful, epic) — they carry zero sonic information.
+7. ARTIST NAMES ARE BANNED. Suno filters them and flags impersonation. If the user names an artist, DECOMPOSE them into: era+production, genre/subgenre, 2–3 defining instruments, GENERIC vocal character, mood+rhythmic feel. Never emit the artist's name in any field.
+8. Negatives are guidance, not bans. Put them in the Exclude field. Max ~2 exclusions, each paired with a replacement. Watch genre default-traps (gospel→choir, reggae→skank guitar, EDM→harsh leads, rap→ad-libs, orchestral→choir).
+9. Avoid contradictions (lo-fi+studio quality, minimal+orchestral, aggressive+peaceful).
+10. Keep the style prompt tight (aim ~200 chars, front-loaded). Detail belongs in the structure scaffold.
+
+OUTPUT CONTRACT — return ONLY a JSON object, no prose, no markdown fences:
+{
+  "style": "the Style-of-Music field, genre first, 6–12 descriptors, includes BPM + vocal spec",
+  "exclude": "comma list for Suno's Exclude field, or empty string",
+  "bpm": "e.g. 92",
+  "structure": "a LYRICS-field scaffold using [Intro]/[Verse]/[Chorus]/[Bridge]/[Outro] tags with brief functional cues in parentheses; no actual lyrics unless asked",
+  "notes": "one short practical tip for this specific song",
+  "variants": ["one alternate style prompt taking a different angle"]
+}`;
+
+export function buildUserMessage(mode, input) {
+  const clean = String(input || "").trim();
+  if (mode === "artist") {
+    return `The user wants a song that sounds like: "${clean}". Decompose this artist/style into safe descriptors (never name them) and produce the Suno prompt JSON.`;
+  }
+  if (mode === "refine") {
+    return `Improve this existing Suno style prompt — fix weak spots per your rules, keep its intent: "${clean}". Produce the Suno prompt JSON.`;
+  }
+  return `The user described this vibe/feeling: "${clean}". Produce the Suno prompt JSON.`;
+}
+
+// Tolerant JSON extraction — strips fences/prose, grabs the outermost object.
+function extractJson(text) {
+  if (!text) throw new Error("empty response");
+  const fenced = text.replace(/```json\s*/gi, "").replace(/```/g, "");
+  const start = fenced.indexOf("{");
+  const end = fenced.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start)
+    throw new Error("no JSON object found");
+  return JSON.parse(fenced.slice(start, end + 1));
+}
+
+function normalize(obj) {
+  return {
+    style: String(obj.style || "").trim(),
+    exclude: String(obj.exclude || "").trim(),
+    bpm: String(obj.bpm || "").trim(),
+    structure: String(obj.structure || "").trim(),
+    notes: String(obj.notes || "").trim(),
+    variants: Array.isArray(obj.variants)
+      ? obj.variants.map((v) => String(v).trim()).filter(Boolean)
+      : [],
+    fallback: false,
+  };
+}
+
+async function callClaude(apiKey, model, userMessage, strict) {
+  const messages = [{ role: "user", content: userMessage }];
+  if (strict) messages.push({ role: "assistant", content: "{" });
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": ANTHROPIC_VERSION,
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 800,
+      system: SYSTEM_PROMPT,
+      messages,
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    const map = {
+      401: "Invalid API key — check it in Settings.",
+      429: "Rate limited — wait a moment and retry.",
+    };
+    throw new Error(
+      map[res.status] ||
+        `Anthropic API error ${res.status}: ${detail.slice(0, 160)}`,
+    );
+  }
+  const data = await res.json();
+  let text = (data.content || []).map((b) => b.text || "").join("");
+  if (strict) text = `{${text}`; // re-attach the prefilled brace
+  return text;
+}
+
+// Main entry. Returns a normalized result; falls back to offline seeds on any failure.
+export async function generatePrompt({
+  mode,
+  input,
+  apiKey,
+  model = DEFAULT_MODEL,
+}) {
+  if (!String(input || "").trim())
+    throw new Error("Describe a vibe or an artist first.");
+  if (!apiKey)
+    return {
+      ...offlineGenerate(mode, input),
+      notes:
+        "No API key set — used the offline library. Add your Anthropic key in Settings for full AI generation.",
+    };
+
+  const userMessage = buildUserMessage(mode, input);
+  try {
+    return normalize(extractJson(await callClaude(apiKey, model, userMessage)));
+  } catch (firstErr) {
+    if (/API key|Rate limited|API error/.test(firstErr.message)) {
+      // Real API/network problem — surface it rather than silently masking.
+      const fb = offlineGenerate(mode, input);
+      return {
+        ...fb,
+        notes: `${firstErr.message} Showing an offline suggestion instead.`,
+      };
+    }
+    // Parse problem — retry once in strict JSON-prefill mode.
+    try {
+      return normalize(
+        extractJson(await callClaude(apiKey, model, userMessage, true)),
+      );
+    } catch {
+      const fb = offlineGenerate(mode, input);
+      return {
+        ...fb,
+        notes:
+          "AI response was unparseable twice — used the offline library instead.",
+      };
+    }
+  }
+}
+
+// Offline fallback using the curated seed maps. Never throws.
+export function offlineGenerate(mode, input) {
+  const q = String(input || "").toLowerCase();
+  const table = mode === "artist" ? ARTIST_TRANSLATIONS : VIBE_SEEDS;
+  const hit = table.find((row) => row.match.some((m) => q.includes(m)));
+  const style = hit ? hit.prompt : seedFromKeywords(mode, q);
+  const trapKey = Object.keys(GENRE_TRAPS).find((g) =>
+    style.toLowerCase().includes(g.toLowerCase()),
+  );
+  return {
+    style,
+    exclude: trapKey ? GENRE_TRAPS[trapKey].fix : "",
+    bpm: (style.match(/(\d{2,3})\s*bpm/i) || [])[1] || "",
+    structure:
+      "[Intro] (set the mood, 4 bars)\n[Verse] (intimate, minimal)\n[Pre-Chorus] (build tension)\n[Chorus] (full energy, the hook)\n[Verse]\n[Chorus]\n[Bridge] (left turn, strip back)\n[Outro] (resolve / fade)",
+    notes: hit
+      ? "Starting point from the offline library — generate 3–5 variations on Suno and iterate."
+      : "Generic scaffold — set your API key for a tailored prompt.",
+    variants: [],
+    fallback: true,
+  };
+}
+
+function seedFromKeywords(mode, q) {
+  const base =
+    mode === "artist"
+      ? "modern production, defining instrumentation, generic vocal character, mood and rhythmic feel"
+      : "indie pop, 100 BPM, jangly guitar, warm drums, breathy female vocals, nostalgic, lo-fi warmth";
+  return q ? `${base} — built around: ${q.slice(0, 80)}` : base;
+}

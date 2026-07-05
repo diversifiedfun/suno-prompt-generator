@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Suno Prompt Studio",
+  "version": "1.2.0",
+  "description": "Build, capture, AI-generate, and sequence Suno music prompts and sets.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["contextMenus", "storage", "sidePanel", "tabs", "scripting"],
+  "host_permissions": ["https://api.anthropic.com/*", "https://suno.com/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    { "matches": ["https://suno.com/*"], "js": ["suno-fill.js"], "run_at": "document_idle" }
+  ],
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": {
+    "default_title": "Suno Prompt Studio",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" }
+}
