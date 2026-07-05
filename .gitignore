@@ -14,3 +14,8 @@ store/*.zip
 store/listing.md
 store/submission-checklist.md
 store/permissions-justifications.md
+
+# Internal — never commit to the PUBLIC repo
+HANDOFF.md
+.claude/
+.ship/
