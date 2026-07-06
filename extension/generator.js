@@ -96,8 +96,12 @@ async function callClaude(apiKey, model, userMessage, strict) {
       "anthropic-dangerous-direct-browser-access": "true",
     },
     body: JSON.stringify({
+      // Full lyrics (when a subject is given) + title + style + structure +
+      // variants overrun 800 tokens and truncate the JSON mid-string, which then
+      // fails to parse and silently falls back to offline. 2048 matches the
+      // set generator's lyric-bearing track call and leaves ample room.
       model,
-      max_tokens: 800,
+      max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages,
     }),
