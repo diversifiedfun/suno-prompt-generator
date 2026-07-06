@@ -434,6 +434,26 @@ textarea {
   margin-bottom: 6px;
 }
 
+/* Suno slider/vocal recommendations block. */
+.suno-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.suno-setting {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.suno-setting-k {
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+.suno-setting-v {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
 .result-text {
   font-family: var(--mono);
   font-size: 12px;

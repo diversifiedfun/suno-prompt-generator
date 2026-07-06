@@ -29,6 +29,8 @@ NON-NEGOTIABLE RULES (from tested research):
 10. Keep the style prompt tight (aim ~200 chars, front-loaded). Detail belongs in the structure scaffold.
 11. ALWAYS return a "title": an evocative 2–5 word song title that fits the vibe (never an artist name, never generic like "Untitled").
 12. LYRICS: If the user gives a SUBJECT (what the song is about), WRITE full, specific, non-cliché lyrics in the "lyrics" field — real verses plus a chorus built around that subject, using [Section] tags. If NO subject is given, return "lyrics" as an empty string and rely on the structure scaffold instead. Never emit an artist's name in the lyrics.
+13. VOCAL GENDER: unless the song is instrumental, decide the singer and return "vocalGender" as exactly one of "female", "male", "duet", or "any". Put the matching vocal descriptor in the style too (e.g. "breathy female vocals").
+14. SUNO SLIDERS: recommend two 0–100 values. "weirdness" = how experimental/unexpected (low 10–25 for clean radio-ready, mid 30–50 for character, high 60+ for glitchy/odd). "styleInfluence" = how hard Suno hugs the style prompt (higher 55–75 = closer to the described genre/era, lower 30–45 = looser/more creative). Pick deliberately for THIS song, not defaults.
 
 OUTPUT CONTRACT — return ONLY a JSON object, no prose, no markdown fences:
 {
@@ -36,6 +38,9 @@ OUTPUT CONTRACT — return ONLY a JSON object, no prose, no markdown fences:
   "style": "the Style-of-Music field, genre first, 6–12 descriptors, includes BPM + vocal spec",
   "exclude": "comma list for Suno's Exclude field, or empty string",
   "bpm": "e.g. 92",
+  "vocalGender": "female | male | duet | any",
+  "weirdness": 20,
+  "styleInfluence": 60,
   "structure": "a LYRICS-field scaffold using [Intro]/[Verse]/[Chorus]/[Bridge]/[Outro] tags with brief functional cues in parentheses; no actual lyrics",
   "lyrics": "full lyrics with [Section] tags when a SUBJECT is given; otherwise an empty string",
   "notes": "one short practical tip for this specific song",
@@ -68,12 +73,27 @@ function extractJson(text) {
   return JSON.parse(fenced.slice(start, end + 1));
 }
 
+// Clamp a slider recommendation to an integer 0–100; empty string if unusable.
+function clampPct(v) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return "";
+  return String(Math.max(0, Math.min(100, n)));
+}
+
+const VOCAL_GENDERS = new Set(["female", "male", "duet", "any"]);
+
 function normalize(obj) {
+  const gender = String(obj.vocalGender || "")
+    .trim()
+    .toLowerCase();
   return {
     title: String(obj.title || "").trim(),
     style: String(obj.style || "").trim(),
     exclude: String(obj.exclude || "").trim(),
     bpm: String(obj.bpm || "").trim(),
+    vocalGender: VOCAL_GENDERS.has(gender) ? gender : "",
+    weirdness: clampPct(obj.weirdness),
+    styleInfluence: clampPct(obj.styleInfluence),
     structure: String(obj.structure || "").trim(),
     lyrics: String(obj.lyrics || "").trim(),
     notes: String(obj.notes || "").trim(),
@@ -179,11 +199,21 @@ export function offlineGenerate(mode, input, subject = "") {
   const trapKey = Object.keys(GENRE_TRAPS).find((g) =>
     style.toLowerCase().includes(g.toLowerCase()),
   );
+  // Derive gender from the seed style text when it says so, else leave it open.
+  const lowerStyle = style.toLowerCase();
+  const vocalGender = /\bfemale\b/.test(lowerStyle)
+    ? "female"
+    : /\bmale\b/.test(lowerStyle)
+      ? "male"
+      : "";
   return {
     title: offlineTitle(subject, input),
     style,
     exclude: trapKey ? GENRE_TRAPS[trapKey].fix : "",
     bpm: (style.match(/(\d{2,3})\s*bpm/i) || [])[1] || "",
+    vocalGender,
+    weirdness: "20",
+    styleInfluence: "60",
     structure:
       "[Intro] (set the mood, 4 bars)\n[Verse] (intimate, minimal)\n[Pre-Chorus] (build tension)\n[Chorus] (full energy, the hook)\n[Verse]\n[Chorus]\n[Bridge] (left turn, strip back)\n[Outro] (resolve / fade)",
     lyrics: "",

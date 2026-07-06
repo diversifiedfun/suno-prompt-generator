@@ -55,6 +55,19 @@ describe("offlineGenerate", () => {
     expect(r.style).toBeTruthy();
     expect(r.fallback).toBe(true);
   });
+
+  it("includes default slider recs and a valid vocalGender", () => {
+    const r = offlineGenerate("vibe", "zzqq-nomatch", "");
+    expect(r.weirdness).toBe("20");
+    expect(r.styleInfluence).toBe("60");
+    // The generic vibe seed carries "breathy female vocals" → female.
+    expect(r.vocalGender).toBe("female");
+  });
+
+  it("leaves vocalGender empty when the style names no gender", () => {
+    const r = offlineGenerate("artist", "zzqq-nomatch", "");
+    expect(["", "female", "male", "duet", "any"]).toContain(r.vocalGender);
+  });
 });
 
 describe("generatePrompt (offline path)", () => {

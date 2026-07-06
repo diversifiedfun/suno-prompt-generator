@@ -764,6 +764,18 @@ function renderGenerateResults(container, result) {
     container.appendChild(note);
   }
 
+  // One-click paste of the whole song (title + style + exclude + lyrics + slider
+  // recommendations) into an open Suno tab. Status renders just beneath it.
+  const pasteStatus = el("div", "settings-status");
+  const pasteRow = el("div", "btn-row");
+  const pasteBtn = el("button", "btn primary", "🎵 Paste all → Suno");
+  pasteBtn.addEventListener("click", () =>
+    pasteVibeIntoSuno(result, pasteStatus),
+  );
+  pasteRow.appendChild(pasteBtn);
+  container.appendChild(pasteRow);
+  container.appendChild(pasteStatus);
+
   // Title leads — it's Suno's first field. Copy only (not a saveable prompt).
   if (result.title) {
     container.appendChild(
@@ -785,6 +797,9 @@ function renderGenerateResults(container, result) {
       buildResultSection("BPM", result.bpm, "result-text bpm-text"),
     );
   }
+  // Suno slider + vocal recommendations, compact.
+  const settingsEl = renderSunoSettings(result);
+  if (settingsEl) container.appendChild(settingsEl);
   // Real lyrics (subject given) replace the bare scaffold; otherwise show the
   // structure scaffold so the Lyrics field still has something to paste.
   if (result.lyrics) {
@@ -871,6 +886,92 @@ function buildResultSection(
 
   section.appendChild(row);
   return section;
+}
+
+// Compact block for Suno's non-text recommendations: vocal gender + the two
+// sliders (Weirdness, Style Influence). Returns null when there's nothing to show.
+function renderSunoSettings(result) {
+  const bits = [];
+  if (result.vocalGender)
+    bits.push([
+      "Vocals",
+      result.vocalGender === "any" ? "any / either" : result.vocalGender,
+    ]);
+  if (result.weirdness !== "" && result.weirdness != null)
+    bits.push(["Weirdness", `${result.weirdness}%`]);
+  if (result.styleInfluence !== "" && result.styleInfluence != null)
+    bits.push(["Style influence", `${result.styleInfluence}%`]);
+  if (!bits.length) return null;
+
+  const section = el("div", "result-section");
+  section.appendChild(el("div", "result-label", "Suno settings"));
+  const box = el("div", "suno-settings");
+  for (const [k, v] of bits) {
+    const row = el("div", "suno-setting");
+    row.appendChild(el("span", "suno-setting-k", k));
+    row.appendChild(el("span", "suno-setting-v", v));
+    box.appendChild(row);
+  }
+  section.appendChild(box);
+  section.appendChild(
+    el(
+      "div",
+      "hint",
+      "“Paste all → Suno” sets these where it can; otherwise nudge the sliders to match.",
+    ),
+  );
+  return section;
+}
+
+// Fill an open Suno tab's fields from a Vibe result — title + style + exclude +
+// lyrics, plus best-effort slider values. Mirrors the Set tab's paste: find the
+// suno.com tab, message the content script, inject + retry once on a stale tab.
+async function pasteVibeIntoSuno(result, statusEl) {
+  const setStatus = (t) => {
+    if (statusEl) statusEl.textContent = t;
+  };
+  let tabs;
+  try {
+    tabs = await chrome.tabs.query({ url: "https://suno.com/*" });
+  } catch {
+    setStatus("Couldn't reach Chrome tabs.");
+    return;
+  }
+  if (!tabs.length) {
+    setStatus("Open a suno.com tab first (log in → Create page).");
+    return;
+  }
+  const tabId = tabs[0].id;
+  const payload = {
+    type: "suno-fill",
+    title: result.title || "",
+    style: result.style || "",
+    exclude: result.exclude || "",
+    lyrics: result.lyrics || result.structure || "",
+    weirdness: result.weirdness || "",
+    styleInfluence: result.styleInfluence || "",
+  };
+  let resp;
+  try {
+    resp = await chrome.tabs.sendMessage(tabId, payload);
+  } catch {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ["suno-fill.js"],
+      });
+      resp = await chrome.tabs.sendMessage(tabId, payload);
+    } catch {
+      setStatus("Couldn't reach the Suno tab — reload suno.com and retry.");
+      return;
+    }
+  }
+  if (resp && resp.ok) {
+    setStatus("Pasted into Suno — check the sliders match, then hit Create.");
+    chrome.tabs.update(tabId, { active: true });
+  } else {
+    setStatus((resp && resp.error) || "Couldn't fill Suno's fields.");
+  }
 }
 
 // ---------------------------------------------------------------------------
