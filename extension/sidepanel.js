@@ -30,6 +30,8 @@ import {
   deletePrompt,
   getSettings,
   setSettings,
+  getUiState,
+  saveUiState,
 } from "./storage.js";
 
 import {
@@ -48,21 +50,69 @@ import { renderSetTab } from "./set-tab.js";
 const tabBtns = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
 
-tabBtns.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const target = btn.dataset.tab;
-    tabBtns.forEach((b) => {
-      b.classList.toggle("active", b.dataset.tab === target);
-      b.setAttribute("aria-selected", String(b.dataset.tab === target));
-    });
-    tabPanels.forEach((p) => {
-      p.classList.toggle("hidden", p.id !== `tab-${target}`);
-    });
-    // Refresh library when switching to it so captures show immediately.
-    if (target === "library") renderLibrary();
-    if (target === "set") renderSetTab();
+// Switch to a tab by name. Shared by user clicks and session restore so both
+// paths stay in sync. `persist=false` is used during boot restore so replaying
+// the saved tab doesn't immediately re-save it.
+function activateTab(target, persist = true) {
+  tabBtns.forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === target);
+    b.setAttribute("aria-selected", String(b.dataset.tab === target));
   });
+  tabPanels.forEach((p) => {
+    p.classList.toggle("hidden", p.id !== `tab-${target}`);
+  });
+  // Refresh library when switching to it so captures show immediately.
+  if (target === "library") renderLibrary();
+  if (target === "set") renderSetTab();
+  if (persist) {
+    uiState = { ...uiState, activeTab: target };
+    persistUi();
+  }
+}
+
+tabBtns.forEach((btn) => {
+  btn.addEventListener("click", () => activateTab(btn.dataset.tab));
 });
+
+// ---------------------------------------------------------------------------
+// Session UI state — the whole object is loaded at boot and re-saved (debounced)
+// on every change, so reopening the panel lands where the user left off.
+// Immutable: every mutation replaces uiState with a new object.
+// ---------------------------------------------------------------------------
+
+let uiState = {};
+let persistTimer = null;
+// Gate: no persistence until boot's restore has run, so the init calls that fire
+// during startup (updateBuildPreview, etc.) can't overwrite the saved state with
+// empty defaults before we've had a chance to read it back.
+let booted = false;
+
+function persistUi() {
+  if (!booted) return;
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    saveUiState(uiState).catch((e) =>
+      console.warn("[Suno] UI state save failed:", e.message),
+    );
+  }, 250);
+}
+
+// Snapshot the Build tab's chip/select state into uiState. Called from
+// updateBuildPreview (the chokepoint for every style change) and on lyrics edits.
+function snapshotBuild() {
+  uiState = {
+    ...uiState,
+    build: {
+      genre: buildState.genre,
+      era: buildState.era,
+      moods: [...buildState.moods],
+      instruments: [...buildState.instruments],
+      vocals: [...buildState.vocals],
+      lyrics: document.getElementById("build-lyrics")?.value ?? "",
+    },
+  };
+  persistUi();
+}
 
 // ---------------------------------------------------------------------------
 // Library tab
@@ -504,6 +554,8 @@ function updateBuildPreview() {
     w.appendChild(msg);
     warningsEl.appendChild(w);
   }
+
+  snapshotBuild();
 }
 
 function initLyricsTags() {
@@ -547,6 +599,7 @@ function insertTag(textarea, text) {
   textarea.value = before + text + after;
   textarea.selectionStart = textarea.selectionEnd = start + text.length;
   textarea.focus();
+  snapshotBuild();
 }
 
 document
@@ -561,6 +614,11 @@ document
     const ta = document.getElementById("build-lyrics");
     await copyAndFlash(e.currentTarget, ta.value);
   });
+
+// Direct typing in the lyrics box (not via a tag chip) also persists.
+document
+  .getElementById("build-lyrics")
+  .addEventListener("input", snapshotBuild);
 
 document.getElementById("build-save").addEventListener("click", async () => {
   const style = buildStyleString();
@@ -604,7 +662,15 @@ function setMode(mode) {
   document
     .getElementById("gen-artist-note")
     .classList.toggle("hidden", mode !== "artist");
+  uiState = { ...uiState, gen: { ...uiState.gen, mode } };
+  persistUi();
 }
+
+// Persist the vibe/artist input as the user types so a reopen restores it.
+document.getElementById("gen-input").addEventListener("input", (e) => {
+  uiState = { ...uiState, gen: { ...uiState.gen, input: e.target.value } };
+  persistUi();
+});
 
 document.getElementById("gen-submit").addEventListener("click", handleGenerate);
 
@@ -652,6 +718,13 @@ async function handleGenerate() {
   loading.classList.add("hidden");
   renderGenerateResults(results, result);
   results.classList.remove("hidden");
+
+  // Persist the last result so reopening the panel restores it (not just the input).
+  uiState = {
+    ...uiState,
+    gen: { ...uiState.gen, input, mode: genMode, result },
+  };
+  persistUi();
 }
 
 function renderGenerateResults(container, result) {
@@ -831,8 +904,79 @@ async function initFirstRunBanner() {
     ?.addEventListener("click", () => banner.classList.add("hidden"));
 }
 
+// Restore the Build tab's saved chip/select state from uiState.build.
+function restoreBuild() {
+  const b = uiState.build;
+  if (!b || typeof b !== "object") return;
+
+  const genreSelect = document.getElementById("build-genre");
+  if (b.genre) {
+    const known = [...genreSelect.options].some((o) => o.value === b.genre);
+    if (known) {
+      genreSelect.value = b.genre;
+      buildState.genre = b.genre;
+    } else {
+      // Not a listed genre → restore through the Custom-genre path.
+      const family = document.getElementById("build-family");
+      const custom = document.getElementById("build-genre-custom");
+      if (family && custom) {
+        custom.value = b.genre;
+        family.value = "__custom__";
+        family.dispatchEvent(new Event("change"));
+      }
+      buildState.genre = b.genre;
+    }
+  }
+
+  const eraSelect = document.getElementById("build-era");
+  if (b.era && [...eraSelect.options].some((o) => o.value === b.era)) {
+    eraSelect.value = b.era;
+    buildState.era = b.era;
+  }
+
+  const applySet = (containerId, arr, stateSet) => {
+    stateSet.clear();
+    for (const v of arr || []) stateSet.add(v);
+    const container = document.getElementById(containerId);
+    for (const chip of container.querySelectorAll(".chip"))
+      chip.classList.toggle("on", stateSet.has(chip.textContent));
+  };
+  applySet("build-mood-chips", b.moods, buildState.moods);
+  applySet("build-instrument-chips", b.instruments, buildState.instruments);
+  applySet("build-vocal-chips", b.vocals, buildState.vocals);
+
+  const lyrics = document.getElementById("build-lyrics");
+  if (lyrics && typeof b.lyrics === "string") lyrics.value = b.lyrics;
+
+  updateBuildPreview();
+}
+
+// Restore the Vibe tab's input, mode, and last result.
+function restoreGen() {
+  const g = uiState.gen;
+  if (!g || typeof g !== "object") return;
+  if (typeof g.input === "string")
+    document.getElementById("gen-input").value = g.input;
+  if (g.mode === "vibe" || g.mode === "artist") setMode(g.mode);
+  if (g.result && typeof g.result === "object") {
+    const results = document.getElementById("gen-results");
+    renderGenerateResults(results, g.result);
+    results.classList.remove("hidden");
+  }
+}
+
+const VALID_TABS = ["generate", "build", "set", "library", "settings"];
+
 (async function boot() {
   try {
+    // Load saved session state first so restores below have it (init calls that
+    // fire during setup can't persist — the `booted` gate keeps persistUi off).
+    try {
+      uiState = await getUiState();
+    } catch {
+      uiState = {};
+    }
+
     initBuildSelects();
     initBuildChips();
     updateBuildPreview();
@@ -843,6 +987,13 @@ async function initFirstRunBanner() {
       renderLibrary(),
       initFirstRunBanner(),
     ]);
+
+    // Replay saved session state, then open persistence for real.
+    restoreBuild();
+    restoreGen();
+    if (VALID_TABS.includes(uiState.activeTab))
+      activateTab(uiState.activeTab, false);
+    booted = true;
   } finally {
     // Always clear the overlay, even if a storage read failed.
     document.getElementById("app-loading")?.classList.add("loaded");

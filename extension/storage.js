@@ -124,3 +124,24 @@ export async function setSettings(patch) {
   // Guard: never accidentally log or expose apiKey in error messages
   await storageSet({ [SETTINGS_KEY]: next });
 }
+
+// --- UI state ---------------------------------------------------------------
+// Remembers where the user was — active tab + in-progress Vibe and Build inputs
+// and results — so reopening the side panel restores the session instead of
+// resetting to a blank Vibe tab. The caller owns the shape and always writes the
+// WHOLE object (never a read-modify-write patch), so rapid keystroke saves can't
+// interleave and drop each other. Never holds the API key.
+
+const UI_STATE_KEY = "uiState";
+
+export async function getUiState() {
+  const stored = await storageGet([UI_STATE_KEY]);
+  const s = stored[UI_STATE_KEY];
+  return s && typeof s === "object" ? s : {};
+}
+
+export async function saveUiState(state) {
+  await storageSet({
+    [UI_STATE_KEY]: state && typeof state === "object" ? state : {},
+  });
+}
