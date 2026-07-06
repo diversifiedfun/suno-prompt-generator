@@ -21,6 +21,13 @@ const LYRICS_SELECTORS = [
   'textarea[placeholder*="lyrics" i]',
   'textarea[aria-label*="lyrics" i]',
 ];
+// Song-title field — best-effort only (Suno has hidden it behind an "advanced"
+// toggle before). If it's not on screen we skip it rather than fail the paste.
+const TITLE_SELECTORS = [
+  'input[data-testid="create-form-title-input"]',
+  'input[placeholder*="title" i]',
+  'input[aria-label*="title" i]',
+];
 
 function findField(selectors) {
   for (const sel of selectors) {
@@ -61,6 +68,10 @@ if (!window.__sunoFillInstalled) {
     }
     setNativeValue(styleEl, msg.style || "");
     if (lyricsEl && msg.lyrics) setNativeValue(lyricsEl, msg.lyrics);
+    if (msg.title) {
+      const titleEl = findField(TITLE_SELECTORS);
+      if (titleEl) setNativeValue(titleEl, msg.title);
+    }
     styleEl.scrollIntoView({ behavior: "smooth", block: "center" });
     sendResponse({ ok: true });
     return true; // async-safe

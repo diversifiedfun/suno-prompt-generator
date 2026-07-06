@@ -155,6 +155,8 @@ export async function saveFormDraft({
   scene,
   keywords,
   story,
+  freeVibe,
+  feelings,
   genres,
   subChoices,
   runtimeMin,
@@ -171,6 +173,10 @@ export async function saveFormDraft({
     scene: String(scene || ""),
     keywords: String(keywords || ""),
     story: String(story || ""),
+    // Free-text set vibe (colors the sound) and feelings/mood, kept distinct
+    // from the lyrics theme so sound words never leak into lyrics and vice versa.
+    freeVibe: String(freeVibe || ""),
+    feelings: String(feelings || ""),
     genres: Array.isArray(genres) ? [...genres] : [],
     subChoices:
       subChoices && typeof subChoices === "object" ? { ...subChoices } : {},

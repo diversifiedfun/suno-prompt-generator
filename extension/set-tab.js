@@ -35,7 +35,7 @@ import {
   nudgeBrief,
   motifTargets,
 } from "./set-generator.js";
-import { getSettings } from "./storage.js";
+import { getSettings, getAllVibes } from "./storage.js";
 
 let currentSetId = null;
 const setGenres = new Set();
@@ -52,6 +52,10 @@ const intake = {
   countOverride: null,
   blanks: {},
   theme: "",
+  // Free-text set vibe (colors the SOUND) and feelings/mood, kept distinct from
+  // the lyrics theme so the two axes the engine already separates are exposed.
+  freeVibe: "",
+  feelings: "",
 };
 
 const POOLS = { vibe: VIBES, theme: THEMES };
@@ -283,6 +287,62 @@ function syncThemeChipHighlight() {
     chip.classList.toggle("on", intake.theme === chip.textContent);
 }
 
+// Feelings / mood — VIBES suggestion chips that APPEND into the free-text field
+// (comma-separated). Feeds vibe[] (sound/feel), kept separate from lyrics theme.
+function renderFeelingsControl() {
+  const chipBox = $set("set-feelings-chips");
+  const text = $set("set-feelings-text");
+  chipBox.textContent = "";
+  for (const word of VIBES) {
+    const chip = el("button", "chip", word);
+    chip.type = "button";
+    chip.addEventListener("click", () => {
+      const parts = text.value
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (!parts.includes(word)) parts.push(word);
+      text.value = parts.join(", ");
+      intake.feelings = text.value;
+      persistDraft();
+    });
+    chipBox.appendChild(chip);
+  }
+  text.value = intake.feelings;
+}
+
+// Saved-vibe chips at the top of the Set tab. Clicking one loads its reference
+// into the set-vibe box and its subject into the lyrics theme.
+async function renderSetSavedVibes() {
+  const box = $set("set-vibe-saved");
+  box.textContent = "";
+  let vibes = [];
+  try {
+    vibes = await getAllVibes();
+  } catch (err) {
+    console.warn("Load vibes failed:", err);
+  }
+  for (const v of vibes.slice(0, 12)) {
+    const label = v.name || v.reference.slice(0, 24) || "vibe";
+    const chip = el("button", "chip", `📎 ${label}`);
+    chip.type = "button";
+    chip.title = "Load this saved vibe";
+    chip.addEventListener("click", () => loadSavedVibeIntoSet(v));
+    box.appendChild(chip);
+  }
+}
+
+function loadSavedVibeIntoSet(v) {
+  intake.freeVibe = v.reference || "";
+  $set("set-vibe-text").value = intake.freeVibe;
+  if (v.subject) {
+    intake.theme = v.subject;
+    renderThemeControl();
+    renderLyricWarn();
+  }
+  persistDraft();
+}
+
 // Shows the preset's lyricWarn (e.g. Deep Focus) only when the user has actually
 // typed a theme on an instrumental preset — otherwise there's nothing to warn about.
 function renderLyricWarn() {
@@ -345,6 +405,16 @@ export function renderSetTab() {
     intake.theme = e.target.value;
     syncThemeChipHighlight();
     renderLyricWarn();
+    persistDraft();
+  });
+  renderFeelingsControl();
+  renderSetSavedVibes();
+  $set("set-vibe-text").addEventListener("input", (e) => {
+    intake.freeVibe = e.target.value;
+    persistDraft();
+  });
+  $set("set-feelings-text").addEventListener("input", (e) => {
+    intake.feelings = e.target.value;
     persistDraft();
   });
   renderMySets();
@@ -431,6 +501,8 @@ function readFormDraft() {
     countOverride: intake.countOverride,
     blanks: { ...intake.blanks },
     theme: intake.theme,
+    freeVibe: intake.freeVibe,
+    feelings: intake.feelings,
     genres: [...setGenres],
     subChoices: collectSubChoices(getPreset(intake.presetKey)),
   };
@@ -482,6 +554,9 @@ async function restoreFormDraft() {
   intake.blanks =
     draft.blanks && typeof draft.blanks === "object" ? { ...draft.blanks } : {};
   intake.theme = typeof draft.theme === "string" ? draft.theme : "";
+  intake.freeVibe = typeof draft.freeVibe === "string" ? draft.freeVibe : "";
+  intake.feelings = typeof draft.feelings === "string" ? draft.feelings : "";
+  $set("set-vibe-text").value = intake.freeVibe;
   setGenres.clear();
   for (const g of draft.genres || []) setGenres.add(g);
   renderSetGenreChips();
@@ -489,6 +564,7 @@ async function restoreFormDraft() {
   renderPresetSubchoices();
   renderMadlib();
   renderThemeControl();
+  renderFeelingsControl();
   renderLyricWarn();
   renderCreditEstimate();
 }
@@ -503,17 +579,29 @@ async function onPlanSet() {
   const trackCount = currentCount();
   const theme = intake.theme.trim();
   const forceLyrics = !!theme && !presetWritesLyrics(preset);
-  const { scene, vibe } = blanksToPlanParams(preset, intake.blanks);
+  // Base scene/vibe come from the occasion's mad-lib blanks; the explicit
+  // free-vibe box and feelings field layer on top. Free vibe colors the SOUND
+  // (→ scene); feelings are mood words (→ vibe[]). Neither touches the lyrics
+  // theme, so the two axes stay separated exactly as the engine expects.
+  const base = blanksToPlanParams(preset, intake.blanks);
+  const freeVibe = intake.freeVibe.trim();
+  const feelingsWords = intake.feelings
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const vibe = [...base.vibe, ...feelingsWords];
+  const scene = [base.scene, freeVibe].filter(Boolean).join(", ");
   const occ = getOccasion(preset.key);
   const parts = [];
   if (genres.length) parts.push(`Genres: ${genres.join(", ")}`);
-  if (vibe.length) parts.push(`Vibe: ${vibe.join(", ")}`);
-  if (scene) parts.push(`Scene: ${scene}`);
+  if (freeVibe) parts.push(`Vibe: ${freeVibe}`);
+  if (vibe.length) parts.push(`Feel: ${vibe.join(", ")}`);
+  if (base.scene) parts.push(`Scene: ${base.scene}`);
   if (theme) parts.push(`About: ${theme}`);
   const concept = parts.join(". ");
   const subChoices = collectSubChoices(preset);
   const set = await createSet({
-    title: `${preset.label} — ${(theme || scene || (occ && occ.label) || "set").slice(0, 40)}`,
+    title: `${preset.label} — ${(theme || freeVibe || (occ && occ.label) || "set").slice(0, 40)}`,
     presetKey: preset.key,
     maturity: preset.maturity,
     concept,
@@ -886,7 +974,7 @@ function renderTrackCards(set) {
     const text = set.tracks
       .map(
         (t, i) =>
-          `#${i + 1} STYLE: ${t.style}\nEXCLUDE: ${t.exclude}\nBPM: ${t.bpmOrBeatless}\n${t.structure}`,
+          `#${i + 1} ${t.title || ""}\nSTYLE: ${t.style}\nEXCLUDE: ${t.exclude}\nBPM: ${t.bpmOrBeatless}\n${t.lyrics || t.structure}`,
       )
       .join("\n\n");
     copyAndFlash(copyAll, text);
@@ -923,12 +1011,14 @@ function trackStateDot(t) {
   return "○";
 }
 
-// One track card: style/exclude text + Copy/Regenerate/Paste buttons. Clicking
-// the head jumps the resume stepper to this track.
+// One track card: title/style/exclude/lyrics, each with its own Copy button, plus
+// Regenerate/Paste. Title and lyrics are editable and persist. Clicking the head
+// jumps the resume stepper to this track.
 function buildTrackCard(set, t, i) {
   const card = document.createElement("div");
   card.className = "track-card";
   card.classList.toggle("active-track", i === set.activeTrackIndex);
+
   const head = document.createElement("strong");
   head.className = "track-state";
   head.textContent = `${trackStateDot(t)} #${i + 1} · ${t.bpmOrBeatless}`;
@@ -938,44 +1028,93 @@ function buildTrackCard(set, t, i) {
     await updateSet(currentSetId, { activeTrackIndex: i });
     renderTrackCards(await getSet(currentSetId));
   });
+
+  // Persist one field of this track immutably.
+  const patchTrack = async (patch) => {
+    const s = await getSet(currentSetId);
+    const tracks = s.tracks.map((tt, idx) =>
+      idx === i ? { ...tt, ...patch } : tt,
+    );
+    await updateSet(currentSetId, { tracks });
+  };
+
+  // Title — editable, persists, own copy.
+  const titleWrap = el("div", "name-row");
+  const titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.className = "track-title";
+  titleInput.placeholder = "Song title";
+  titleInput.value = t.title || "";
+  titleInput.addEventListener("change", () =>
+    patchTrack({ title: titleInput.value }),
+  );
+  const copyTitle = el("button", "btn", "Copy");
+  copyTitle.addEventListener("click", () =>
+    copyAndFlash(copyTitle, titleInput.value),
+  );
+  titleWrap.append(titleInput, copyTitle);
+
+  // Style + its copy.
   const style = document.createElement("p");
   style.textContent = t.style || "";
-  const exc = document.createElement("p");
-  exc.className = "hint";
-  exc.textContent = t.exclude ? `Exclude: ${t.exclude}` : "";
+  const copyStyle = el("button", "btn", "Copy style");
+  copyStyle.addEventListener("click", () =>
+    copyAndFlash(copyStyle, t.style || ""),
+  );
+  const styleRow = el("div", "btn-row");
+  styleRow.appendChild(copyStyle);
 
-  // Lyrics — shown and editable; edits persist to the stored set.
-  const lyricsLabel = document.createElement("div");
-  lyricsLabel.className = "hint";
-  lyricsLabel.textContent = "Lyrics";
+  // Exclude (only when present) + its copy.
+  const excFrag = document.createDocumentFragment();
+  if (t.exclude) {
+    const exc = document.createElement("p");
+    exc.className = "hint";
+    exc.textContent = `Exclude: ${t.exclude}`;
+    const copyExc = el("button", "btn", "Copy exclude");
+    copyExc.addEventListener("click", () => copyAndFlash(copyExc, t.exclude));
+    const excRow = el("div", "btn-row");
+    excRow.appendChild(copyExc);
+    excFrag.append(exc, excRow);
+  }
+
+  // Lyrics — editable, persists, own copy.
+  const lyricsLabel = el("div", "hint", "Lyrics");
   const lyricsBox = document.createElement("textarea");
   lyricsBox.className = "track-lyrics";
   lyricsBox.rows = 6;
   lyricsBox.value = t.lyrics || t.structure || "";
-  lyricsBox.addEventListener("change", async () => {
-    const s = await getSet(currentSetId);
-    const tracks = s.tracks.map((tt, idx) =>
-      idx === i ? { ...tt, lyrics: lyricsBox.value } : tt,
-    );
-    await updateSet(currentSetId, { tracks });
-  });
-
-  const copy = document.createElement("button");
-  copy.className = "btn";
-  copy.textContent = "Copy";
-  copy.addEventListener("click", () =>
-    copyAndFlash(copy, `${t.style}\n\n${lyricsBox.value}`),
+  lyricsBox.addEventListener("change", () =>
+    patchTrack({ lyrics: lyricsBox.value }),
   );
-  const regen = document.createElement("button");
-  regen.className = "btn";
-  regen.textContent = "Regenerate";
-  regen.addEventListener("click", () => regenerateOne(i));
-  const paste = document.createElement("button");
-  paste.className = "btn";
-  paste.textContent = "Paste → Suno";
-  paste.addEventListener("click", () => pasteIntoSuno(t, i));
+  const copyLyrics = el("button", "btn", "Copy lyrics");
+  copyLyrics.addEventListener("click", () =>
+    copyAndFlash(copyLyrics, lyricsBox.value),
+  );
+  const lyricsRow = el("div", "btn-row");
+  lyricsRow.appendChild(copyLyrics);
 
-  card.append(head, style, exc, lyricsLabel, lyricsBox, copy, regen, paste);
+  const regen = el("button", "btn", "Regenerate");
+  regen.addEventListener("click", () => regenerateOne(i));
+  const paste = el("button", "btn primary", "Paste → Suno");
+  // Re-fetch so any just-typed title/lyrics edits go across, even without blur.
+  paste.addEventListener("click", async () => {
+    const s = await getSet(currentSetId);
+    await pasteIntoSuno(s.tracks[i], i);
+  });
+  const actions = el("div", "btn-row");
+  actions.append(regen, paste);
+
+  card.append(
+    head,
+    titleWrap,
+    style,
+    styleRow,
+    excFrag,
+    lyricsLabel,
+    lyricsBox,
+    lyricsRow,
+    actions,
+  );
   return card;
 }
 
@@ -1014,6 +1153,7 @@ async function pasteIntoSuno(track, index) {
   const tabId = tabs[0].id;
   const payload = {
     type: "suno-fill",
+    title: track.title || "",
     style: track.style,
     lyrics: track.lyrics || track.structure,
   };

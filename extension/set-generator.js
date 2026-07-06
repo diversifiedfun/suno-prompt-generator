@@ -164,6 +164,7 @@ export function offlineTrack(preset, brief, forceLyrics = false) {
   const style = `${preset.palette.slice(0, 4).join(", ")}, ${brief.bpmOrBeatless}, ${brief.doWords.join(", ")}`;
   const structure = preset.structurePolicy.allow.join("\n");
   return {
+    title: offlineTrackTitle(preset, brief),
     style: style.slice(0, 200),
     exclude,
     bpmOrBeatless: brief.bpmOrBeatless,
@@ -175,6 +176,21 @@ export function offlineTrack(preset, brief, forceLyrics = false) {
       : "[Instrumental]",
     notes: `Offline fallback from the ${preset.label} preset — set your API key for a tailored track.`,
   };
+}
+
+// Offline can't invent good titles; derive a stable one from the track's lead
+// texture (Title-Cased, ≤4 words) so the field is never blank, with a numbered
+// fallback. Not exported — offlineTrack's private helper.
+function offlineTrackTitle(preset, brief) {
+  const src = String((brief && brief.leadTexture) || "").trim();
+  const words = src
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 4);
+  if (words.length)
+    return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return `Track ${(brief && brief.trackIndex) || ""}`.trim();
 }
 
 function extractJson(text) {
@@ -239,8 +255,9 @@ RULES: energy is 1–10 (1=ambient/beatless, 5=danceable, 8-9=festival). Move ±
 OUTPUT ONLY JSON: {"arcType":"...","contour":[8 numbers],"motif":"...","briefs":[{"trackIndex":1,"arcEnergy":N,"bpmOrBeatless":"...","vocalDefault":"...","leadTexture":"...","doWords":[...],"dontWords":[...],"structureHint":"[Intro]..."}]}`;
 
 const TRACK_SYSTEM = `You are a world-class Suno prompt engineer AND lyricist. Expand ONE track brief into a Suno prompt. Genre first, 6–12 descriptors, front-loaded, ~150–180 chars. Honor the brief's bpmOrBeatless exactly (if beatless, do NOT add a BPM). Only use [Section] tags allowed by the brief's structureHint. Never emit artist names or empty evaluative words. Never make medical/therapeutic claims.
+TITLE: ALWAYS give this track a distinct, evocative title (2–5 words) that fits its moment in the set — never an artist name, never "Untitled", never the same as another track.
 LYRICS: If the brief's vocalDefault is a sung or chanted style (full-lead or chant), WRITE full, specific, non-cliché lyrics — verses plus a chorus built around THIS track's distinct hook — using the allowed [Section] tags. If the vocalDefault is instrumental / wordless / none, set "lyrics" to exactly "[Instrumental]" and write NO words.
-OUTPUT ONLY JSON: {"style":"...","exclude":"...","bpmOrBeatless":"...","structure":"[Intro]...","lyrics":"full lyrics with [Section] tags, or [Instrumental]","notes":"..."}`;
+OUTPUT ONLY JSON: {"title":"...","style":"...","exclude":"...","bpmOrBeatless":"...","structure":"[Intro]...","lyrics":"full lyrics with [Section] tags, or [Instrumental]","notes":"..."}`;
 
 // Only sung/chant presets get written words; wordless/instrumental/none stay instrumental.
 const LYRIC_VOCALS = new Set(["full-lead", "chant"]);
@@ -470,6 +487,7 @@ function normalizeTrack(obj, preset, forceLyrics = false) {
     ? stripClaims(String(obj.lyrics || "").trim(), guard) || structure
     : "[Instrumental]";
   return {
+    title: stripClaims(String(obj.title || "").trim(), guard),
     style: stripBpmIfBeatless(stripClaims(obj.style, guard), preset).slice(
       0,
       200,

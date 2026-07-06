@@ -165,7 +165,11 @@
           <div id="set-mysets-list"></div>
         </details>
 
-        <p class="section-head step-head"><span class="step-num">1</span><span class="step-label">What's the occasion?</span></p>
+        <label class="field-label" for="set-vibe-text">✨ Set vibe <span class="hint">(optional — describe the whole set, or load a saved vibe. Or just pick a preset below.)</span></label>
+        <div id="set-vibe-saved" class="chips"></div>
+        <textarea id="set-vibe-text" rows="2" placeholder="e.g. sunset rooftop, warm and hypnotic…"></textarea>
+
+        <p class="section-head step-head"><span class="step-num">1</span><span class="step-label">Pick an occasion <span class="hint">(preset)</span></span></p>
         <div id="set-occasions"><!-- cards injected --></div>
 
         <p class="section-head step-head"><span class="step-num">2</span><span class="step-label">How long?</span></p>
@@ -194,6 +198,10 @@
         <p class="section-head step-head"><span class="step-num">3</span><span class="step-label">Fill in the blank</span></p>
         <p id="set-madlib" class="madlib"><!-- sentence injected --></p>
         <div id="set-madlib-chips" class="chips"></div>
+
+        <label class="field-label" for="set-feelings-text">💭 Feelings / mood <span class="hint">(how it should feel — colors the sound, not the words)</span></label>
+        <div id="set-feelings-chips" class="chips"></div>
+        <input type="text" id="set-feelings-text" placeholder="e.g. dreamy, hypnotic, warm…" autocomplete="off" />
 
         <label class="field-label" for="set-theme-text">✍️ Lyrics theme <span class="hint">(optional — what the words are about)</span></label>
         <div id="set-theme-chips" class="chips"></div>

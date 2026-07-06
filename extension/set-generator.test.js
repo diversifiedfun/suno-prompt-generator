@@ -54,6 +54,12 @@ describe("offline fallbacks", () => {
     const t = offlineTrack(p, offlinePlan(p).briefs[0]);
     expect(t.structure).not.toMatch(/\[Chorus\]/);
   });
+  it("offlineTrack always returns a non-empty title", () => {
+    const p = getPreset("sleep");
+    const t = offlineTrack(p, offlinePlan(p).briefs[0]);
+    expect(typeof t.title).toBe("string");
+    expect(t.title.length).toBeGreaterThan(0);
+  });
 });
 
 describe("planSet", () => {
