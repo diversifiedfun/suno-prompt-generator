@@ -104,6 +104,47 @@ export async function deletePrompt(id) {
   await storageRemove([`prompt_${id}`]);
 }
 
+// --- Saved vibes ------------------------------------------------------------
+// A "vibe" is a reusable SEED (the idea, not a finished prompt): the vibe/artist
+// reference + optional subject + mode. Saved under `vibe_<id>` so it never
+// collides with prompt_ records, and loadable into the Build or Set tabs. This
+// is the recipe you save; finished prompts still go to the Library separately.
+
+// Strictly-increasing timestamp so two vibes saved in the same millisecond still
+// sort deterministically newest-first (Date.now() ties otherwise).
+let lastVibeStamp = 0;
+function vibeNow() {
+  const t = Date.now();
+  lastVibeStamp = t > lastVibeStamp ? t : lastVibeStamp + 1;
+  return lastVibeStamp;
+}
+
+export async function addVibe({ name, reference, subject, mode } = {}) {
+  const id = crypto.randomUUID();
+  const record = {
+    id,
+    name: String(name || "").trim(),
+    reference: String(reference || "").trim(),
+    subject: String(subject || "").trim(),
+    mode: mode === "artist" ? "artist" : "vibe",
+    createdAt: vibeNow(),
+  };
+  await storageSet({ [`vibe_${id}`]: record });
+  return record;
+}
+
+export async function getAllVibes() {
+  const all = await storageGetAll();
+  return Object.entries(all)
+    .filter(([key]) => key.startsWith("vibe_"))
+    .map(([, val]) => val)
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function deleteVibe(id) {
+  await storageRemove([`vibe_${id}`]);
+}
+
 // --- Settings ---------------------------------------------------------------
 // Settings live under a single key. apiKey is NEVER logged.
 

@@ -27,26 +27,34 @@ NON-NEGOTIABLE RULES (from tested research):
 8. Negatives are guidance, not bans. Put them in the Exclude field. Max ~2 exclusions, each paired with a replacement. Watch genre default-traps (gospel→choir, reggae→skank guitar, EDM→harsh leads, rap→ad-libs, orchestral→choir).
 9. Avoid contradictions (lo-fi+studio quality, minimal+orchestral, aggressive+peaceful).
 10. Keep the style prompt tight (aim ~200 chars, front-loaded). Detail belongs in the structure scaffold.
+11. ALWAYS return a "title": an evocative 2–5 word song title that fits the vibe (never an artist name, never generic like "Untitled").
+12. LYRICS: If the user gives a SUBJECT (what the song is about), WRITE full, specific, non-cliché lyrics in the "lyrics" field — real verses plus a chorus built around that subject, using [Section] tags. If NO subject is given, return "lyrics" as an empty string and rely on the structure scaffold instead. Never emit an artist's name in the lyrics.
 
 OUTPUT CONTRACT — return ONLY a JSON object, no prose, no markdown fences:
 {
+  "title": "an evocative 2–5 word song title (never an artist name)",
   "style": "the Style-of-Music field, genre first, 6–12 descriptors, includes BPM + vocal spec",
   "exclude": "comma list for Suno's Exclude field, or empty string",
   "bpm": "e.g. 92",
-  "structure": "a LYRICS-field scaffold using [Intro]/[Verse]/[Chorus]/[Bridge]/[Outro] tags with brief functional cues in parentheses; no actual lyrics unless asked",
+  "structure": "a LYRICS-field scaffold using [Intro]/[Verse]/[Chorus]/[Bridge]/[Outro] tags with brief functional cues in parentheses; no actual lyrics",
+  "lyrics": "full lyrics with [Section] tags when a SUBJECT is given; otherwise an empty string",
   "notes": "one short practical tip for this specific song",
   "variants": ["one alternate style prompt taking a different angle"]
 }`;
 
-export function buildUserMessage(mode, input) {
+export function buildUserMessage(mode, input, subject = "") {
   const clean = String(input || "").trim();
+  const subj = String(subject || "").trim();
+  const subjectLine = subj
+    ? ` The song is ABOUT: "${subj}" — write full lyrics on this subject in the lyrics field.`
+    : "";
   if (mode === "artist") {
-    return `The user wants a song that sounds like: "${clean}". Decompose this artist/style into safe descriptors (never name them) and produce the Suno prompt JSON.`;
+    return `The user wants a song that sounds like: "${clean}".${subjectLine} Decompose this artist/style into safe descriptors (never name them) and produce the Suno prompt JSON.`;
   }
   if (mode === "refine") {
-    return `Improve this existing Suno style prompt — fix weak spots per your rules, keep its intent: "${clean}". Produce the Suno prompt JSON.`;
+    return `Improve this existing Suno style prompt — fix weak spots per your rules, keep its intent: "${clean}".${subjectLine} Produce the Suno prompt JSON.`;
   }
-  return `The user described this vibe/feeling: "${clean}". Produce the Suno prompt JSON.`;
+  return `The user described this vibe/feeling: "${clean}".${subjectLine} Produce the Suno prompt JSON.`;
 }
 
 // Tolerant JSON extraction — strips fences/prose, grabs the outermost object.
@@ -62,10 +70,12 @@ function extractJson(text) {
 
 function normalize(obj) {
   return {
+    title: String(obj.title || "").trim(),
     style: String(obj.style || "").trim(),
     exclude: String(obj.exclude || "").trim(),
     bpm: String(obj.bpm || "").trim(),
     structure: String(obj.structure || "").trim(),
+    lyrics: String(obj.lyrics || "").trim(),
     notes: String(obj.notes || "").trim(),
     variants: Array.isArray(obj.variants)
       ? obj.variants.map((v) => String(v).trim()).filter(Boolean)
@@ -113,6 +123,7 @@ async function callClaude(apiKey, model, userMessage, strict) {
 export async function generatePrompt({
   mode,
   input,
+  subject = "",
   apiKey,
   model = DEFAULT_MODEL,
 }) {
@@ -120,18 +131,18 @@ export async function generatePrompt({
     throw new Error("Describe a vibe or an artist first.");
   if (!apiKey)
     return {
-      ...offlineGenerate(mode, input),
+      ...offlineGenerate(mode, input, subject),
       notes:
         "No API key set — used the offline library. Add your Anthropic key in Settings for full AI generation.",
     };
 
-  const userMessage = buildUserMessage(mode, input);
+  const userMessage = buildUserMessage(mode, input, subject);
   try {
     return normalize(extractJson(await callClaude(apiKey, model, userMessage)));
   } catch (firstErr) {
     if (/API key|Rate limited|API error/.test(firstErr.message)) {
       // Real API/network problem — surface it rather than silently masking.
-      const fb = offlineGenerate(mode, input);
+      const fb = offlineGenerate(mode, input, subject);
       return {
         ...fb,
         notes: `${firstErr.message} Showing an offline suggestion instead.`,
@@ -143,7 +154,7 @@ export async function generatePrompt({
         extractJson(await callClaude(apiKey, model, userMessage, true)),
       );
     } catch {
-      const fb = offlineGenerate(mode, input);
+      const fb = offlineGenerate(mode, input, subject);
       return {
         ...fb,
         notes:
@@ -153,8 +164,10 @@ export async function generatePrompt({
   }
 }
 
-// Offline fallback using the curated seed maps. Never throws.
-export function offlineGenerate(mode, input) {
+// Offline fallback using the curated seed maps. Never throws. Offline can't write
+// real lyrics, so `lyrics` stays empty even when a subject is given; the title is
+// a light derivation from the subject or vibe so the field is never blank.
+export function offlineGenerate(mode, input, subject = "") {
   const q = String(input || "").toLowerCase();
   const table = mode === "artist" ? ARTIST_TRANSLATIONS : VIBE_SEEDS;
   const hit = table.find((row) => row.match.some((m) => q.includes(m)));
@@ -163,17 +176,33 @@ export function offlineGenerate(mode, input) {
     style.toLowerCase().includes(g.toLowerCase()),
   );
   return {
+    title: offlineTitle(subject, input),
     style,
     exclude: trapKey ? GENRE_TRAPS[trapKey].fix : "",
     bpm: (style.match(/(\d{2,3})\s*bpm/i) || [])[1] || "",
     structure:
       "[Intro] (set the mood, 4 bars)\n[Verse] (intimate, minimal)\n[Pre-Chorus] (build tension)\n[Chorus] (full energy, the hook)\n[Verse]\n[Chorus]\n[Bridge] (left turn, strip back)\n[Outro] (resolve / fade)",
+    lyrics: "",
     notes: hit
       ? "Starting point from the offline library — generate 3–5 variations on Suno and iterate."
       : "Generic scaffold — set your API key for a tailored prompt.",
     variants: [],
     fallback: true,
   };
+}
+
+// A light Title-Case title from the subject (preferred) or vibe text — first few
+// words, no trailing punctuation. Falls back to "Untitled" only if both empty.
+export function offlineTitle(subject, input) {
+  const src = String(subject || input || "").trim();
+  if (!src) return "Untitled";
+  const words = src
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 4);
+  if (!words.length) return "Untitled";
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 function seedFromKeywords(mode, q) {
