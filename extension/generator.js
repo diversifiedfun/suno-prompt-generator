@@ -28,9 +28,10 @@ NON-NEGOTIABLE RULES (from tested research):
 9. Avoid contradictions (lo-fi+studio quality, minimal+orchestral, aggressive+peaceful).
 10. Keep the style prompt tight (aim ~200 chars, front-loaded). Detail belongs in the structure scaffold.
 11. ALWAYS return a "title": an evocative 2–5 word song title that fits the vibe (never an artist name, never generic like "Untitled").
-12. LYRICS: If the user gives a SUBJECT (what the song is about), WRITE full, specific, non-cliché lyrics in the "lyrics" field — real verses plus a chorus built around that subject, using [Section] tags. If NO subject is given, return "lyrics" as an empty string and rely on the structure scaffold instead. Never emit an artist's name in the lyrics.
+12. LYRICS: If the user gives a SUBJECT (what the song is about), WRITE full, specific, non-cliché lyrics in the "lyrics" field — real verses plus a chorus built around that subject, using [Section] tags. If NO subject is given, return "lyrics" as an empty string and rely on the structure scaffold instead. Never emit an artist's name in the lyrics. If a production/vocal effect would help a specific line, WRITE the inline tag directly into the lyrics at that spot (e.g. [Vocal Chop], [Stutter], [Whisper], [Belt], [Spoken], [Harmonies]) — do NOT tell the user to add it; the lyrics field must be paste-ready as-is.
 13. VOCAL GENDER: unless the song is instrumental, decide the singer and return "vocalGender" as exactly one of "female", "male", "duet", or "any". Put the matching vocal descriptor in the style too (e.g. "breathy female vocals").
 14. SUNO SLIDERS: recommend two 0–100 values. "weirdness" = how experimental/unexpected (low 10–25 for clean radio-ready, mid 30–50 for character, high 60+ for glitchy/odd). "styleInfluence" = how hard Suno hugs the style prompt (higher 55–75 = closer to the described genre/era, lower 30–45 = looser/more creative). Pick deliberately for THIS song, not defaults.
+15. NOTES: "notes" is ONE short, concrete, do-it-now sentence. It must NOT hedge ("if Suno supports it", "keep regenerating until…"), must NOT tell the user to add tags (bake those into the lyrics instead per rule 12), and must NOT restate the style or lyrics. If there is nothing genuinely useful and specific to add, return an empty string.
 
 OUTPUT CONTRACT — return ONLY a JSON object, no prose, no markdown fences:
 {
@@ -43,7 +44,7 @@ OUTPUT CONTRACT — return ONLY a JSON object, no prose, no markdown fences:
   "styleInfluence": 60,
   "structure": "a LYRICS-field scaffold using [Intro]/[Verse]/[Chorus]/[Bridge]/[Outro] tags with brief functional cues in parentheses; no actual lyrics",
   "lyrics": "full lyrics with [Section] tags when a SUBJECT is given; otherwise an empty string",
-  "notes": "one short practical tip for this specific song",
+  "notes": "one concrete do-it-now sentence, or empty string — no hedging, no 'add this tag', no restating style/lyrics",
   "variants": ["one alternate style prompt taking a different angle"]
 }`;
 

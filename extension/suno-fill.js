@@ -73,38 +73,48 @@ function setSlider(keyword, pct) {
   return false;
 }
 
-// Idempotent install: the side panel re-injects this file into stale tabs via
-// chrome.scripting, so guard against registering the listener twice (which would
-// double-fill the fields).
-if (!window.__sunoFillInstalled) {
-  window.__sunoFillInstalled = true;
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg.type !== "suno-fill") return;
-    const styleEl = findField(STYLE_SELECTORS);
-    const lyricsEl = findField(LYRICS_SELECTORS);
-    if (!styleEl) {
-      sendResponse({
-        ok: false,
-        error:
-          "Couldn't find Suno's Style box. Open the Create page and switch to Custom mode, then retry.",
-      });
-      return true;
-    }
-    setNativeValue(styleEl, msg.style || "");
-    if (lyricsEl && msg.lyrics) setNativeValue(lyricsEl, msg.lyrics);
-    if (msg.title) {
-      const titleEl = findField(TITLE_SELECTORS);
-      if (titleEl) setNativeValue(titleEl, msg.title);
-    }
-    if (msg.exclude) {
-      const excludeEl = findField(EXCLUDE_SELECTORS);
-      if (excludeEl) setNativeValue(excludeEl, msg.exclude);
-    }
-    // Best-effort sliders (may be no-ops if Suno uses custom widgets).
-    setSlider("weird", msg.weirdness);
-    setSlider("influence", msg.styleInfluence);
-    styleEl.scrollIntoView({ behavior: "smooth", block: "center" });
-    sendResponse({ ok: true });
-    return true; // async-safe
-  });
+function sunoFillHandler(msg, _sender, sendResponse) {
+  if (msg.type !== "suno-fill") return;
+  const styleEl = findField(STYLE_SELECTORS);
+  const lyricsEl = findField(LYRICS_SELECTORS);
+  if (!styleEl) {
+    sendResponse({
+      ok: false,
+      error:
+        "Couldn't find Suno's Style box. Open the Create page and switch to Custom mode, then retry.",
+    });
+    return true;
+  }
+  setNativeValue(styleEl, msg.style || "");
+  if (lyricsEl && msg.lyrics) setNativeValue(lyricsEl, msg.lyrics);
+  if (msg.title) {
+    const titleEl = findField(TITLE_SELECTORS);
+    if (titleEl) setNativeValue(titleEl, msg.title);
+  }
+  if (msg.exclude) {
+    const excludeEl = findField(EXCLUDE_SELECTORS);
+    if (excludeEl) setNativeValue(excludeEl, msg.exclude);
+  }
+  // Best-effort sliders (may be no-ops if Suno uses custom widgets).
+  setSlider("weird", msg.weirdness);
+  setSlider("influence", msg.styleInfluence);
+  styleEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  sendResponse({ ok: true });
+  return true; // async-safe
 }
+
+// Install with a handler-ref swap, NOT a one-shot boolean guard. After an
+// extension RELOAD, an already-open suno.com tab keeps an orphaned copy of this
+// script whose chrome.runtime is dead; the old boolean guard then blocked the
+// side panel's re-injection, so paste failed ("Couldn't reach the Suno tab")
+// until a manual page reload. Swapping the stored handler guarantees exactly one
+// LIVE listener on every (re)injection — no double-fill, no dead listener.
+if (window.__sunoFillHandler) {
+  try {
+    chrome.runtime.onMessage.removeListener(window.__sunoFillHandler);
+  } catch {
+    // Old handler belonged to a dead context — nothing to remove.
+  }
+}
+window.__sunoFillHandler = sunoFillHandler;
+chrome.runtime.onMessage.addListener(sunoFillHandler);
