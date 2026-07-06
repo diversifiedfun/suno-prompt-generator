@@ -170,8 +170,11 @@ export async function setSettings(patch) {
 // Remembers where the user was — active tab + in-progress Vibe and Build inputs
 // and results — so reopening the side panel restores the session instead of
 // resetting to a blank Vibe tab. The caller owns the shape and always writes the
-// WHOLE object (never a read-modify-write patch), so rapid keystroke saves can't
-// interleave and drop each other. Never holds the API key.
+// WHOLE object (never a read-modify-write patch): within one panel instance the
+// in-memory merge + debounce serializes rapid keystroke saves so they can't drop
+// each other. (Two panels open on the same profile would each hold their own
+// snapshot and last-write-wins — an accepted edge, not a data model we defend.)
+// Never holds the API key.
 
 const UI_STATE_KEY = "uiState";
 

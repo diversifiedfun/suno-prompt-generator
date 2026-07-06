@@ -102,7 +102,11 @@ function persistUi() {
 
 // Snapshot the Build tab's chip/select state into uiState. Called from
 // updateBuildPreview (the chokepoint for every style change) and on lyrics edits.
+// No-ops until boot's restore has run — otherwise the updateBuildPreview() call
+// during startup would overwrite the loaded uiState.build with empty DOM values
+// before restoreBuild() gets to read it.
 function snapshotBuild() {
+  if (!booted) return;
   uiState = {
     ...uiState,
     build: {

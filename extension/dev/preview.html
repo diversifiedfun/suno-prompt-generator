@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <!-- DEV ONLY preview: runs the real sidepanel UI in a normal tab via the chrome shim.
-     Body mirrors ../sidepanel.html exactly (keep in sync when that changes).
+     GENERATED from ../sidepanel.html by dev/build-preview.mjs — do NOT hand-edit;
+     edit sidepanel.html and re-run `node dev/build-preview.mjs`.
      Not part of the shipped extension. Serve over http (ES modules need it):
        python3 -m http.server 8765   # from the extension/ dir
        open http://localhost:8765/dev/preview.html -->
@@ -76,6 +77,13 @@
         <p>Pick a genre and era, then tap mood / instrument / vocal chips to build one song's style. The preview updates live and flags problems. <strong>Copy style</strong> pastes into Suno; <strong>Save to Library</strong> keeps it. No API key needed for this tab.</p>
       </details>
       <div class="field">
+        <label for="build-name">Song name <span class="hint">(optional)</span></label>
+        <div class="name-row">
+          <input type="text" id="build-name" placeholder="e.g. Taillights" autocomplete="off" />
+          <button class="btn" id="build-copy-name" type="button">Copy</button>
+        </div>
+      </div>
+      <div class="field">
         <label for="build-genre">Genre</label>
         <select id="build-genre"></select>
       </div>
@@ -123,11 +131,19 @@
       </div>
       <details class="tab-help">
         <summary>❔ How this works</summary>
-        <p>Describe a scene or feeling ("rainy drive, someone left"), or switch to <strong>Artist</strong> and name a reference (it uses the *sound*, never the name). <strong>Generate</strong> writes a full Suno prompt — style, what to exclude, BPM, and a lyric structure. Needs your API key (⚙ Settings).</p>
+        <p>Describe a scene or feeling ("rainy drive, someone left"), or switch to <strong>Artist</strong> and name a reference (it uses the *sound*, never the name). Add <strong>what it's about</strong> to get real lyrics. <strong>Generate</strong> writes a full Suno prompt — title, style, exclude, BPM, and lyrics. Needs your API key (⚙ Settings).</p>
+      </details>
+      <details id="vibe-saved" class="tab-help">
+        <summary>📎 Saved vibes</summary>
+        <div id="vibe-saved-list"></div>
       </details>
       <div class="field">
         <label for="gen-input">Describe your vibe or artist reference</label>
         <textarea id="gen-input" rows="3" placeholder="e.g. late night drive, melancholy…"></textarea>
+      </div>
+      <div class="field">
+        <label for="gen-subject">What's it about? <span class="hint">(optional — writes real lyrics)</span></label>
+        <textarea id="gen-subject" rows="2" placeholder="e.g. driving home after a breakup…"></textarea>
       </div>
       <div class="mode-toggle" role="group" aria-label="Generation mode">
         <button class="mode-btn active" data-mode="vibe" id="mode-vibe">Vibe</button>
@@ -139,7 +155,9 @@
       </div>
       <div class="btn-row">
         <button class="btn primary" id="gen-submit">Generate</button>
+        <button class="btn" id="gen-save-vibe">Save vibe</button>
       </div>
+      <div id="gen-save-status" class="settings-status"></div>
       <div id="gen-loading" class="loading hidden">Generating…</div>
       <div id="gen-results" class="gen-results hidden"></div>
     </section>
@@ -160,7 +178,11 @@
           <div id="set-mysets-list"></div>
         </details>
 
-        <p class="section-head step-head"><span class="step-num">1</span><span class="step-label">What's the occasion?</span></p>
+        <label class="field-label" for="set-vibe-text">✨ Set vibe <span class="hint">(optional — describe the whole set, or load a saved vibe. Or just pick a preset below.)</span></label>
+        <div id="set-vibe-saved" class="chips"></div>
+        <textarea id="set-vibe-text" rows="2" placeholder="e.g. sunset rooftop, warm and hypnotic…"></textarea>
+
+        <p class="section-head step-head"><span class="step-num">1</span><span class="step-label">Pick an occasion <span class="hint">(preset)</span></span></p>
         <div id="set-occasions"><!-- cards injected --></div>
 
         <p class="section-head step-head"><span class="step-num">2</span><span class="step-label">How long?</span></p>
@@ -189,6 +211,10 @@
         <p class="section-head step-head"><span class="step-num">3</span><span class="step-label">Fill in the blank</span></p>
         <p id="set-madlib" class="madlib"><!-- sentence injected --></p>
         <div id="set-madlib-chips" class="chips"></div>
+
+        <label class="field-label" for="set-feelings-text">💭 Feelings / mood <span class="hint">(how it should feel — colors the sound, not the words)</span></label>
+        <div id="set-feelings-chips" class="chips"></div>
+        <input type="text" id="set-feelings-text" placeholder="e.g. dreamy, hypnotic, warm…" autocomplete="off" />
 
         <label class="field-label" for="set-theme-text">✍️ Lyrics theme <span class="hint">(optional — what the words are about)</span></label>
         <div id="set-theme-chips" class="chips"></div>
