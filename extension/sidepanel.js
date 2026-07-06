@@ -45,7 +45,8 @@ import {
   filterSelectOptions,
 } from "./dom-utils.js";
 import { renderSetTab } from "./set-tab.js";
-import { rankSuggestions } from "./fuzzy.js";
+import { renderAlbumTab } from "./album-tab.js";
+import { attachAutocomplete } from "./autocomplete.js";
 import { ARTISTS, VIBE_WORDS } from "./suggest-data.js";
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,7 @@ function activateTab(target, persist = true) {
   // Refresh library when switching to it so captures show immediately.
   if (target === "library") renderLibrary();
   if (target === "set") renderSetTab();
+  if (target === "album") renderAlbumTab();
   if (persist) {
     uiState = { ...uiState, activeTab: target };
     persistUi();
@@ -683,119 +685,35 @@ function setMode(mode) {
   document
     .getElementById("gen-artist-note")
     .classList.toggle("hidden", mode !== "artist");
-  hideSuggest(); // pool changed — drop stale suggestions
+  genAutocomplete.hide(); // pool changed — drop stale suggestions
   uiState = { ...uiState, gen: { ...uiState.gen, mode } };
   persistUi();
 }
 
 // ---------------------------------------------------------------------------
-// Vibe-tab autocomplete — a fuzzy dropdown of artists (Artist mode) or vibe/
-// genre words (Vibe mode) to help when you can't spell the whole thing. Local
-// and offline; Artist mode still decomposes the name, never emits it.
+// Vibe-tab autocomplete — fuzzy dropdown of artists (Artist mode) or vibe/genre
+// words (Vibe mode). Local + offline; Artist mode still decomposes the name.
+// Shared engine in autocomplete.js (the Album seed uses it too).
 // ---------------------------------------------------------------------------
 
 const SUGGEST_ARTISTS = [...new Set(ARTISTS)];
 const SUGGEST_VIBES = [...new Set(VIBE_WORDS)];
-let suggestItems = [];
-let suggestActive = -1;
 
-// In Vibe mode people type comma-separated terms, so match only the segment
-// being typed; in Artist mode match the whole field.
-function suggestQuery(value) {
-  if (genMode === "artist") return value.trim();
-  const parts = value.split(",");
-  return parts[parts.length - 1].trim();
-}
-
-function updateSuggest() {
-  const value = document.getElementById("gen-input").value;
-  const query = suggestQuery(value);
-  const pool = genMode === "artist" ? SUGGEST_ARTISTS : SUGGEST_VIBES;
-  suggestItems = query.length >= 2 ? rankSuggestions(query, pool, 8) : [];
-  suggestActive = -1;
-  renderSuggest();
-}
-
-function renderSuggest() {
-  const box = document.getElementById("gen-suggest");
-  box.textContent = "";
-  if (!suggestItems.length) {
-    box.classList.add("hidden");
-    return;
-  }
-  suggestItems.forEach((item, i) => {
-    const row = el(
-      "div",
-      "suggest-item" + (i === suggestActive ? " active" : ""),
-      item,
-    );
-    row.setAttribute("role", "option");
-    // mousedown (not click) so it fires before the textarea's blur; preventDefault
-    // keeps focus in the field.
-    row.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      chooseSuggest(item);
-    });
-    box.appendChild(row);
-  });
-  box.classList.remove("hidden");
-}
-
-function chooseSuggest(item) {
-  const input = document.getElementById("gen-input");
-  if (genMode === "artist") {
-    input.value = item;
-  } else {
-    const parts = input.value.split(",");
-    parts[parts.length - 1] = ` ${item}`;
-    input.value = parts.join(",").replace(/^\s+/, "");
-  }
-  uiState = { ...uiState, gen: { ...uiState.gen, input: input.value } };
-  persistUi();
-  hideSuggest();
-  input.focus();
-}
-
-function hideSuggest() {
-  suggestItems = [];
-  suggestActive = -1;
-  const box = document.getElementById("gen-suggest");
-  box.textContent = "";
-  box.classList.add("hidden");
-}
-
-// Persist the vibe/artist input as the user types so a reopen restores it, and
-// refresh the autocomplete.
+// Persist the vibe/artist input as the user types so a reopen restores it.
 document.getElementById("gen-input").addEventListener("input", (e) => {
   uiState = { ...uiState, gen: { ...uiState.gen, input: e.target.value } };
   persistUi();
-  updateSuggest();
 });
 
-// Keyboard nav while the dropdown is open.
-document.getElementById("gen-input").addEventListener("keydown", (e) => {
-  if (!suggestItems.length) return;
-  if (e.key === "ArrowDown") {
-    e.preventDefault();
-    suggestActive = (suggestActive + 1) % suggestItems.length;
-    renderSuggest();
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    suggestActive =
-      (suggestActive - 1 + suggestItems.length) % suggestItems.length;
-    renderSuggest();
-  } else if (e.key === "Enter" && suggestActive >= 0) {
-    e.preventDefault();
-    chooseSuggest(suggestItems[suggestActive]);
-  } else if (e.key === "Escape") {
-    hideSuggest();
-  }
-});
-
-// Close the dropdown when focus leaves the field (delayed so an item mousedown
-// still registers).
-document.getElementById("gen-input").addEventListener("blur", () => {
-  setTimeout(hideSuggest, 150);
+const genAutocomplete = attachAutocomplete({
+  input: document.getElementById("gen-input"),
+  box: document.getElementById("gen-suggest"),
+  getPool: () => (genMode === "artist" ? SUGGEST_ARTISTS : SUGGEST_VIBES),
+  segmentize: () => genMode !== "artist",
+  onChoose: (value) => {
+    uiState = { ...uiState, gen: { ...uiState.gen, input: value } };
+    persistUi();
+  },
 });
 
 // Persist the "what it's about" subject the same way.
@@ -1316,7 +1234,7 @@ function restoreGen() {
   }
 }
 
-const VALID_TABS = ["generate", "build", "set", "library", "settings"];
+const VALID_TABS = ["generate", "build", "set", "album", "library", "settings"];
 
 (async function boot() {
   try {

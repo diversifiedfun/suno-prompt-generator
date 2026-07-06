@@ -39,6 +39,9 @@
     <button class="tab-btn" data-tab="set" role="tab" aria-selected="false" aria-controls="tab-set">
       <span class="tab-emoji" aria-hidden="true">🎧</span><span class="tab-label">Set</span>
     </button>
+    <button class="tab-btn" data-tab="album" role="tab" aria-selected="false" aria-controls="tab-album">
+      <span class="tab-emoji" aria-hidden="true">💿</span><span class="tab-label">Album</span>
+    </button>
     <div class="tab-divider" role="presentation" aria-hidden="true"></div>
     <button class="tab-btn" data-tab="library" role="tab" aria-selected="false" aria-controls="tab-library">
       <span class="tab-emoji" aria-hidden="true">📚</span><span class="tab-label">Library</span>
@@ -238,6 +241,51 @@
       <div id="set-stage-b" class="hidden"></div>
       <div id="set-stage-c" class="hidden"></div>
       <div id="set-status" class="settings-status"></div>
+    </section>
+
+    <!-- Album tab -->
+    <section id="tab-album" class="tab-panel hidden" role="tabpanel">
+      <div class="panel-title">
+        <h2>💿 Build an Album</h2>
+        <p class="panel-sub">A cohesive record — one sound, many songs. Not a DJ set.</p>
+      </div>
+      <details class="tab-help">
+        <summary>❔ How this works</summary>
+        <p>Seed it with a <strong>vibe or artist</strong> (or load a saved vibe / library song), pick <strong>Cohesive record</strong> (varied songs, one sound) or <strong>Concept album</strong> (one story across the tracks), choose how many tracks, then <strong>Build album</strong>. You'll get the album's shared sound + a tracklist you can tweak; then <strong>Generate all tracks</strong> and copy or paste each into Suno. Needs your API key (⚙ Settings).</p>
+      </details>
+      <div id="album-stage-a">
+        <details id="album-mine">
+          <summary>📁 My albums</summary>
+          <div id="album-mine-list"></div>
+        </details>
+
+        <label class="field-label" for="album-seed">✨ Seed <span class="hint">(a vibe or an artist — the album's DNA)</span></label>
+        <div id="album-seed-saved" class="chips"></div>
+        <textarea id="album-seed" rows="2" placeholder="e.g. late night neon drive, warm and hypnotic…"></textarea>
+        <div id="album-seed-suggest" class="suggest hidden" role="listbox" aria-label="Suggestions"></div>
+        <div class="mode-toggle" role="group" aria-label="Seed mode">
+          <button class="mode-btn active" data-amode="vibe" id="album-mode-vibe" type="button">Vibe</button>
+          <button class="mode-btn" data-amode="artist" id="album-mode-artist" type="button">Artist</button>
+        </div>
+        <div id="album-artist-note" class="warn amber hidden">
+          <span class="ic">!</span>
+          <span>Artist seed is decomposed into descriptors — never the artist's name (Suno policy).</span>
+        </div>
+
+        <p class="field-label">Album type</p>
+        <div class="mode-toggle" role="group" aria-label="Album type">
+          <button class="mode-btn active" data-atype="cohesive" id="album-type-cohesive" type="button">Cohesive record</button>
+          <button class="mode-btn" data-atype="concept" id="album-type-concept" type="button">Concept album</button>
+        </div>
+
+        <label class="field-label" for="album-count">How many tracks</label>
+        <input type="number" id="album-count" min="3" max="20" value="10" />
+
+        <button class="btn primary" id="album-plan">Build album</button>
+      </div>
+      <div id="album-stage-b" class="hidden"></div>
+      <div id="album-stage-c" class="hidden"></div>
+      <div id="album-status" class="settings-status"></div>
     </section>
 
     <!-- Settings tab -->
