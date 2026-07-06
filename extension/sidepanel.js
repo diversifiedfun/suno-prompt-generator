@@ -32,6 +32,9 @@ import {
   setSettings,
   getUiState,
   saveUiState,
+  addVibe,
+  getAllVibes,
+  deleteVibe,
 } from "./storage.js";
 
 import {
@@ -103,6 +106,7 @@ function snapshotBuild() {
   uiState = {
     ...uiState,
     build: {
+      name: document.getElementById("build-name")?.value ?? "",
       genre: buildState.genre,
       era: buildState.era,
       moods: [...buildState.moods],
@@ -620,6 +624,17 @@ document
   .getElementById("build-lyrics")
   .addEventListener("input", snapshotBuild);
 
+// Song name: persist on type, copy on demand.
+document.getElementById("build-name").addEventListener("input", snapshotBuild);
+document
+  .getElementById("build-copy-name")
+  .addEventListener("click", async (e) => {
+    await copyAndFlash(
+      e.currentTarget,
+      document.getElementById("build-name").value,
+    );
+  });
+
 document.getElementById("build-save").addEventListener("click", async () => {
   const style = buildStyleString();
   if (!style) return;
@@ -672,6 +687,12 @@ document.getElementById("gen-input").addEventListener("input", (e) => {
   persistUi();
 });
 
+// Persist the "what it's about" subject the same way.
+document.getElementById("gen-subject").addEventListener("input", (e) => {
+  uiState = { ...uiState, gen: { ...uiState.gen, subject: e.target.value } };
+  persistUi();
+});
+
 document.getElementById("gen-submit").addEventListener("click", handleGenerate);
 
 async function handleGenerate() {
@@ -680,6 +701,7 @@ async function handleGenerate() {
     alert("Describe a vibe or artist first.");
     return;
   }
+  const subject = document.getElementById("gen-subject").value.trim();
 
   const loading = document.getElementById("gen-loading");
   const results = document.getElementById("gen-results");
@@ -699,6 +721,7 @@ async function handleGenerate() {
     result = await generatePrompt({
       mode: genMode,
       input,
+      subject,
       apiKey: settings.apiKey,
       model: settings.model,
     });
@@ -722,7 +745,7 @@ async function handleGenerate() {
   // Persist the last result so reopening the panel restores it (not just the input).
   uiState = {
     ...uiState,
-    gen: { ...uiState.gen, input, mode: genMode, result },
+    gen: { ...uiState.gen, input, subject, mode: genMode, result },
   };
   persistUi();
 }
@@ -737,6 +760,12 @@ function renderGenerateResults(container, result) {
     container.appendChild(note);
   }
 
+  // Title leads — it's Suno's first field. Copy only (not a saveable prompt).
+  if (result.title) {
+    container.appendChild(
+      buildResultSection("Title", result.title, "result-text"),
+    );
+  }
   if (result.style) {
     container.appendChild(
       buildResultSection("Style", result.style, "result-text", true, result),
@@ -752,7 +781,13 @@ function renderGenerateResults(container, result) {
       buildResultSection("BPM", result.bpm, "result-text bpm-text"),
     );
   }
-  if (result.structure) {
+  // Real lyrics (subject given) replace the bare scaffold; otherwise show the
+  // structure scaffold so the Lyrics field still has something to paste.
+  if (result.lyrics) {
+    container.appendChild(
+      buildResultSection("Lyrics", result.lyrics, "result-text structure-text"),
+    );
+  } else if (result.structure) {
     container.appendChild(
       buildResultSection(
         "Structure scaffold",
@@ -833,6 +868,105 @@ function buildResultSection(
   section.appendChild(row);
   return section;
 }
+
+// ---------------------------------------------------------------------------
+// Saved vibes — reusable seeds (reference + subject + mode). Save from the Vibe
+// tab; reload back into it. The Set tab loads these too (see set-tab.js).
+// ---------------------------------------------------------------------------
+
+async function renderSavedVibes() {
+  const list = document.getElementById("vibe-saved-list");
+  const summary = document.querySelector("#vibe-saved summary");
+  let vibes = [];
+  try {
+    vibes = await getAllVibes();
+  } catch (err) {
+    console.warn("[Suno] Load vibes failed:", err.message);
+  }
+  if (summary) summary.textContent = `📎 Saved vibes (${vibes.length})`;
+  list.textContent = "";
+  if (!vibes.length) {
+    list.appendChild(
+      el("p", "hint", "No saved vibes yet — fill one in and tap “Save vibe.”"),
+    );
+    return;
+  }
+  vibes.forEach((v) => list.appendChild(buildVibeRow(v)));
+}
+
+function buildVibeRow(v) {
+  const row = el("div", "myset-row");
+  const info = el("div", "myset-info");
+  info.appendChild(
+    el("strong", "", v.name || v.reference.slice(0, 40) || "Untitled vibe"),
+  );
+  const meta = [
+    v.mode === "artist" ? "Artist" : "Vibe",
+    v.subject ? "· has lyrics subject" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  info.appendChild(el("span", "hint", meta));
+  row.appendChild(info);
+
+  const load = el("button", "btn", "Load");
+  load.addEventListener("click", () => loadVibe(v));
+  row.appendChild(load);
+
+  const del = el("button", "btn", "🗑");
+  del.title = "Delete";
+  del.addEventListener("click", async () => {
+    if (!confirm(`Delete saved vibe "${v.name || "Untitled"}"?`)) return;
+    try {
+      await deleteVibe(v.id);
+      renderSavedVibes();
+    } catch (err) {
+      console.warn("[Suno] Delete vibe failed:", err.message);
+    }
+  });
+  row.appendChild(del);
+  return row;
+}
+
+function loadVibe(v) {
+  const mode = v.mode === "artist" ? "artist" : "vibe";
+  document.getElementById("gen-input").value = v.reference || "";
+  document.getElementById("gen-subject").value = v.subject || "";
+  setMode(mode);
+  uiState = {
+    ...uiState,
+    gen: {
+      ...uiState.gen,
+      input: v.reference || "",
+      subject: v.subject || "",
+      mode,
+    },
+  };
+  persistUi();
+  document.getElementById("gen-input").focus();
+}
+
+document.getElementById("gen-save-vibe").addEventListener("click", async () => {
+  const reference = document.getElementById("gen-input").value.trim();
+  const subject = document.getElementById("gen-subject").value.trim();
+  const status = document.getElementById("gen-save-status");
+  if (!reference) {
+    status.textContent = "Add a vibe or artist first.";
+    setTimeout(() => (status.textContent = ""), 2000);
+    return;
+  }
+  // Name it from the last generated title if there is one, else the reference.
+  const title = uiState.gen && uiState.gen.result && uiState.gen.result.title;
+  const name = String(title || reference).slice(0, 50);
+  try {
+    await addVibe({ name, reference, subject, mode: genMode });
+    status.textContent = "Saved vibe ✓";
+    renderSavedVibes();
+    setTimeout(() => (status.textContent = ""), 2000);
+  } catch (err) {
+    status.textContent = `Error: ${err.message}`;
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Settings tab
@@ -948,6 +1082,9 @@ function restoreBuild() {
   const lyrics = document.getElementById("build-lyrics");
   if (lyrics && typeof b.lyrics === "string") lyrics.value = b.lyrics;
 
+  const nameEl = document.getElementById("build-name");
+  if (nameEl && typeof b.name === "string") nameEl.value = b.name;
+
   updateBuildPreview();
 }
 
@@ -957,6 +1094,8 @@ function restoreGen() {
   if (!g || typeof g !== "object") return;
   if (typeof g.input === "string")
     document.getElementById("gen-input").value = g.input;
+  if (typeof g.subject === "string")
+    document.getElementById("gen-subject").value = g.subject;
   if (g.mode === "vibe" || g.mode === "artist") setMode(g.mode);
   if (g.result && typeof g.result === "object") {
     const results = document.getElementById("gen-results");
@@ -985,6 +1124,7 @@ const VALID_TABS = ["generate", "build", "set", "library", "settings"];
     await Promise.allSettled([
       initSettings(),
       renderLibrary(),
+      renderSavedVibes(),
       initFirstRunBanner(),
     ]);
 

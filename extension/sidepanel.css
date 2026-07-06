@@ -333,6 +333,17 @@ textarea {
   margin-top: 10px;
 }
 
+/* Inline input + copy button (song-name row). */
+.name-row {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.name-row input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---- Warnings ---- */
 .warn {
   border-radius: var(--radius);
