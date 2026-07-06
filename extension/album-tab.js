@@ -283,9 +283,11 @@ async function startGenerateAll(alb) {
   c.textContent = "";
   const status = el("p", "settings-status");
   c.appendChild(status);
-  const { apiKey, model } = await getSettings();
-  const done = [];
+  // Everything that can throw lives inside try/finally so `busy` always resets —
+  // getSettings() rejecting must not permanently lock generation.
   try {
+    const { apiKey, model } = await getSettings();
+    const done = [];
     for (let i = 0; i < alb.tracks.length; i++) {
       status.textContent = `Generating track ${i + 1} of ${alb.tracks.length}…`;
       const track = await generateAlbumTrack({
