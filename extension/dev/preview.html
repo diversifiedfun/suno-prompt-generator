@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <!-- DEV ONLY preview: runs the real sidepanel UI in a normal tab via the chrome shim.
-     Mirrors ../sidepanel.html exactly. Not part of the shipped extension. -->
+     Body mirrors ../sidepanel.html exactly (keep in sync when that changes).
+     Not part of the shipped extension. Serve over http (ES modules need it):
+       python3 -m http.server 8765   # from the extension/ dir
+       open http://localhost:8765/dev/preview.html -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -15,26 +18,63 @@
 </head>
 <body>
   <div class="dev-banner">DEV PREVIEW — chrome.* shimmed, storage = localStorage. Capture (right-click) is extension-only.</div>
+
+  <div id="app-loading" class="app-loading" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    <span>Loading…</span>
+  </div>
+
   <header>
     <h1>Suno Prompt Studio</h1>
   </header>
 
   <nav class="tab-bar" role="tablist" aria-label="Main tabs">
-    <button class="tab-btn active" data-tab="library" role="tab" aria-selected="true" aria-controls="tab-library">Library</button>
-    <button class="tab-btn" data-tab="build" role="tab" aria-selected="false" aria-controls="tab-build">Build</button>
-    <button class="tab-btn" data-tab="generate" role="tab" aria-selected="false" aria-controls="tab-generate">Generate</button>
-    <button class="tab-btn" data-tab="settings" role="tab" aria-selected="false" aria-controls="tab-settings">Settings</button>
+    <button class="tab-btn active" data-tab="generate" role="tab" aria-selected="true" aria-controls="tab-generate">
+      <span class="tab-emoji" aria-hidden="true">✨</span><span class="tab-label">Vibe</span>
+    </button>
+    <button class="tab-btn" data-tab="build" role="tab" aria-selected="false" aria-controls="tab-build">
+      <span class="tab-emoji" aria-hidden="true">🎛</span><span class="tab-label">Build</span>
+    </button>
+    <button class="tab-btn" data-tab="set" role="tab" aria-selected="false" aria-controls="tab-set">
+      <span class="tab-emoji" aria-hidden="true">🎧</span><span class="tab-label">Set</span>
+    </button>
+    <div class="tab-divider" role="presentation" aria-hidden="true"></div>
+    <button class="tab-btn" data-tab="library" role="tab" aria-selected="false" aria-controls="tab-library">
+      <span class="tab-emoji" aria-hidden="true">📚</span><span class="tab-label">Library</span>
+    </button>
+    <button class="tab-btn tab-btn-icon" data-tab="settings" role="tab" aria-selected="false" aria-controls="tab-settings" title="Settings" aria-label="Settings">
+      <span class="tab-emoji" aria-hidden="true">⚙</span>
+    </button>
   </nav>
 
+  <div id="first-run-banner" class="first-run hidden" role="note">
+    <div class="first-run-body">
+      <strong>👋 New here?</strong> To write real songs you'll need two free-to-start things:
+      an <strong>Anthropic API key</strong> (~2 min) and a <strong>Suno account with credits</strong>.
+      <button type="button" id="first-run-key" class="linklike">Set your key →</button>
+    </div>
+    <button type="button" id="first-run-dismiss" class="first-run-x" aria-label="Dismiss">✕</button>
+  </div>
+
   <main>
-    <section id="tab-library" class="tab-panel" role="tabpanel">
+    <!-- Library tab -->
+    <section id="tab-library" class="tab-panel hidden" role="tabpanel">
       <div class="search-row">
         <input type="text" id="library-search" placeholder="Search prompts…" autocomplete="off" />
       </div>
       <div id="library-list" class="prompt-list"></div>
     </section>
 
+    <!-- Build tab -->
     <section id="tab-build" class="tab-panel hidden" role="tabpanel">
+      <div class="panel-title">
+        <h2>🎛 Build a Song</h2>
+        <p class="panel-sub">Hand-craft one track's style, tag by tag.</p>
+      </div>
+      <details class="tab-help">
+        <summary>❔ How this works</summary>
+        <p>Pick a genre and era, then tap mood / instrument / vocal chips to build one song's style. The preview updates live and flags problems. <strong>Copy style</strong> pastes into Suno; <strong>Save to Library</strong> keeps it. No API key needed for this tab.</p>
+      </details>
       <div class="field">
         <label for="build-genre">Genre</label>
         <select id="build-genre"></select>
@@ -75,7 +115,16 @@
       </div>
     </section>
 
-    <section id="tab-generate" class="tab-panel hidden" role="tabpanel">
+    <!-- Generate tab -->
+    <section id="tab-generate" class="tab-panel" role="tabpanel">
+      <div class="panel-title">
+        <h2>✨ Vibe a Song</h2>
+        <p class="panel-sub">Describe a feeling or reference — get a full prompt.</p>
+      </div>
+      <details class="tab-help">
+        <summary>❔ How this works</summary>
+        <p>Describe a scene or feeling ("rainy drive, someone left"), or switch to <strong>Artist</strong> and name a reference (it uses the *sound*, never the name). <strong>Generate</strong> writes a full Suno prompt — style, what to exclude, BPM, and a lyric structure. Needs your API key (⚙ Settings).</p>
+      </details>
       <div class="field">
         <label for="gen-input">Describe your vibe or artist reference</label>
         <textarea id="gen-input" rows="3" placeholder="e.g. late night drive, melancholy…"></textarea>
@@ -95,6 +144,76 @@
       <div id="gen-results" class="gen-results hidden"></div>
     </section>
 
+    <!-- Set tab -->
+    <section id="tab-set" class="tab-panel hidden" role="tabpanel">
+      <div class="panel-title">
+        <h2>🎧 Design a Set</h2>
+        <p class="panel-sub">A whole multi-track playlist with an energy arc.</p>
+      </div>
+      <details class="tab-help">
+        <summary>❔ How this works</summary>
+        <p>Four steps: <strong>1</strong> pick an occasion, <strong>2</strong> set how long, <strong>3</strong> fill in the sentence (and add a ✍️ lyrics theme if you want words), then <strong>Build my set</strong>. You'll get an energy arc you can nudge (▲/▼) plus a recurring motif; then <strong>Generate all tracks</strong> and <strong>Paste next → Suno</strong> one at a time. Every set auto-saves under 📁 My sets. Needs your API key (⚙ Settings).</p>
+      </details>
+      <div id="set-stage-a">
+        <details id="set-mysets">
+          <summary>📁 My sets</summary>
+          <div id="set-mysets-list"></div>
+        </details>
+
+        <p class="section-head step-head"><span class="step-num">1</span><span class="step-label">What's the occasion?</span></p>
+        <div id="set-occasions"><!-- cards injected --></div>
+
+        <p class="section-head step-head"><span class="step-num">2</span><span class="step-label">How long?</span></p>
+        <div class="length-dials">
+          <div class="dial-group">
+            <span class="dial-group-label">Total runtime</span>
+            <div class="dial" id="set-runtime" role="group" aria-label="Runtime">
+              <button type="button" class="dial-btn" data-min="30">30 min</button>
+              <button type="button" class="dial-btn active" data-min="60">1 hour</button>
+              <button type="button" class="dial-btn" data-min="120">2 hours</button>
+              <button type="button" class="dial-btn" data-min="custom">Custom</button>
+              <input type="number" id="set-runtime-custom" class="hidden" min="5" max="600" placeholder="minutes" />
+            </div>
+          </div>
+          <div class="dial-group">
+            <span class="dial-group-label">Track style</span>
+            <div class="dial" id="set-tracklen" role="group" aria-label="Track length">
+              <button type="button" class="dial-btn active" data-len="standard">Standard</button>
+              <button type="button" class="dial-btn" data-len="extended">Extended</button>
+              <button type="button" class="dial-btn" data-len="dj-long">DJ-Long</button>
+            </div>
+          </div>
+        </div>
+        <p id="set-credit-est" class="credit-est"></p>
+
+        <p class="section-head step-head"><span class="step-num">3</span><span class="step-label">Fill in the blank</span></p>
+        <p id="set-madlib" class="madlib"><!-- sentence injected --></p>
+        <div id="set-madlib-chips" class="chips"></div>
+
+        <label class="field-label" for="set-theme-text">✍️ Lyrics theme <span class="hint">(optional — what the words are about)</span></label>
+        <div id="set-theme-chips" class="chips"></div>
+        <input type="text" id="set-theme-text" placeholder="e.g. water &amp; depth, shipping at 2am…" autocomplete="off" />
+        <p id="set-lyric-warn" class="warn amber hidden"></p>
+
+        <details id="set-finetune">
+          <summary>▸ Fine-tune (optional)</summary>
+          <label class="field-label" for="set-genre-select">Genres <span class="hint">(drive the sound)</span></label>
+          <input type="text" id="set-genre-filter" class="genre-filter" placeholder="Filter genres…" autocomplete="off" />
+          <select id="set-genre-select"></select>
+          <div id="set-genre-chips" class="chips"></div>
+          <label class="field-label" for="set-count-override">Exact track count <span class="hint">(overrides length math)</span></label>
+          <input type="number" id="set-count-override" min="3" max="60" placeholder="auto" />
+          <div id="set-subchoices"></div>
+        </details>
+
+        <button class="btn primary" id="set-plan">Build my set</button>
+      </div>
+      <div id="set-stage-b" class="hidden"></div>
+      <div id="set-stage-c" class="hidden"></div>
+      <div id="set-status" class="settings-status"></div>
+    </section>
+
+    <!-- Settings tab -->
     <section id="tab-settings" class="tab-panel hidden" role="tabpanel">
       <div class="field">
         <label for="settings-apikey">Anthropic API key</label>
@@ -110,6 +229,14 @@
       </div>
       <button class="btn primary" id="settings-save">Save settings</button>
       <div id="settings-status" class="settings-status"></div>
+
+      <details class="tab-help" style="margin-top:18px">
+        <summary>❔ Getting started &amp; help</summary>
+        <p><strong>Get a key:</strong> console.anthropic.com → create an API key (<code>sk-ant-…</code>) → paste above → Save. It's stored only in this browser and sent only to Anthropic — don't use a shared computer.</p>
+        <p><strong>No key?</strong> The Vibe and Set tabs fall back to a built-in library (you'll see a note). Build and Library work fully without a key.</p>
+        <p><strong>Make one song:</strong> ✨ Vibe (describe a feeling) or 🎛 Build (pick ingredients). <strong>Make a set:</strong> 🎧 Set (occasion → length → theme → Build). <strong>Paste into Suno:</strong> open a suno.com tab, log in, then use “Paste next → Suno”.</p>
+        <p><strong>Something blank or stuck?</strong> Reload the extension at chrome://extensions (↻), reopen the panel. Full walkthrough: docs/USER-GUIDE.md in the project.</p>
+      </details>
     </section>
   </main>
 
