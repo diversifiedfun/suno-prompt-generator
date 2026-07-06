@@ -10,12 +10,26 @@ A Manifest V3 side-panel extension for building, capturing, and AI-generating Su
 4. Select the `extension/` folder from this repo.
 5. The extension icon appears in your toolbar. Click it to open the side panel.
 
-## Set Your API Key
+## Get & Set Your API Key
 
+The **✨ Vibe** and **🎧 Set** features call Anthropic's Claude, so bring your own key.
+
+**Create the key (~2 min):**
+1. Open the Anthropic Console → **[platform.claude.com](https://platform.claude.com)**
+   (`console.anthropic.com` redirects here). Sign up or log in.
+2. **Add credits** — the API is pay-as-you-go; open **Billing** and add a payment method or buy
+   prepaid credits. A full set costs roughly a few cents. (New accounts sometimes include a small
+   trial credit.)
+3. Go to **[platform.claude.com/settings/keys](https://platform.claude.com/settings/keys)** →
+   **Create Key** → copy the `sk-ant-…` value (**shown only once**).
+
+**Set it in the extension:**
 1. Open the side panel → **Settings** tab.
-2. Paste your Anthropic API key (`sk-ant-…`) into the password field.
-3. Choose a model (Sonnet 4.6 recommended; Haiku 4.5 is faster and cheaper).
+2. Paste the key into the password field.
+3. Choose a model (Sonnet recommended; Haiku is faster and cheaper).
 4. Click **Save settings**.
+
+New to the API? See Anthropic's **[Get started](https://platform.claude.com/docs/en/get-started)** guide.
 
 Your key is stored in `chrome.storage.local` — local to this browser profile only. It is sent exclusively to `https://api.anthropic.com`. If no key is set, Generate falls back to the curated offline library.
 
