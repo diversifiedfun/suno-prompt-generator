@@ -27,6 +27,29 @@ install, setup, and every tab step by step.
 
 Tabs: **✨ Vibe · 🎛 Build · 🎧 Set · 📚 Library · ⚙ Settings**.
 
+## Getting an Anthropic API key
+
+The AI features (the **✨ Vibe** tab and the **🎧 Set** builder) call Anthropic's Claude, so
+this is a **bring-your-own-key** tool. Your key is stored only in your browser and sent only to
+Anthropic — never to us, and never logged. (**🎛 Build** and **📚 Library** work with no key at all.)
+
+It takes about two minutes:
+
+1. **Open the Anthropic Console** → **[platform.claude.com](https://platform.claude.com)**
+   (the older `console.anthropic.com` also redirects here). Sign up or log in with Google or email.
+2. **Add credits.** The API is pay-as-you-go, so open **Billing** and add a payment method or buy
+   prepaid credits. Usage is cheap — generating a full set runs roughly a few cents. (New accounts
+   sometimes include a small free trial credit.)
+3. **Create the key** → go to **[platform.claude.com/settings/keys](https://platform.claude.com/settings/keys)**
+   → **Create Key** → name it something like `Suno Prompt Studio`.
+4. **Copy it.** The key starts with `sk-ant-` and is shown **only once** — copy it somewhere safe.
+5. **Paste it into the extension:** **⚙ Settings** → **Anthropic API key** → pick a model → **Save**.
+
+That's it — the **✨ Vibe** and **🎧 Set** tabs now generate for real.
+
+> **New to the API?** Anthropic's own quickstart walks through account setup and your first call:
+> **[Get started with the Claude API](https://platform.claude.com/docs/en/get-started)**.
+
 ## The method in one line
 
 `[Genre + Era], [Mood], [Instruments], [Vocals]` — 6–12 descriptors, genre first, anchor a
