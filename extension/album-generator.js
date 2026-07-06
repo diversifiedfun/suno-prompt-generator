@@ -144,7 +144,7 @@ TRACK COUNT: ${count} — output EXACTLY ${count} tracks.`;
     // to the strict retry (which gives the model a second chance to hit it).
     if (!Array.isArray(obj.tracks) || obj.tracks.length !== count)
       throw new Error("bad shape");
-    return normalizeAlbumPlan(obj, seed, mode, count);
+    return normalizeAlbumPlan(obj, seed, seedMode, mode, count);
   } catch (err) {
     if (/API key|Rate limited|API error/.test(err.message))
       return {
@@ -166,7 +166,7 @@ TRACK COUNT: ${count} — output EXACTLY ${count} tracks.`;
       );
       if (!Array.isArray(obj.tracks) || !obj.tracks.length)
         throw new Error("bad shape");
-      return normalizeAlbumPlan(obj, seed, mode, count);
+      return normalizeAlbumPlan(obj, seed, seedMode, mode, count);
     } catch {
       return {
         ...offlineAlbumPlan(seed, seedMode, mode, count),
@@ -178,7 +178,7 @@ TRACK COUNT: ${count} — output EXACTLY ${count} tracks.`;
   }
 }
 
-function normalizeAlbumPlan(obj, seed, mode, count) {
+function normalizeAlbumPlan(obj, seed, seedMode, mode, count) {
   const tracks = obj.tracks.slice(0, count).map((t, i) => ({
     trackTitle: String(t.trackTitle || `Track ${i + 1}`).trim(),
     role: String(
@@ -186,8 +186,11 @@ function normalizeAlbumPlan(obj, seed, mode, count) {
     ).trim(),
     angle: String(t.angle || "").trim(),
   }));
+  // Never fall back to a raw ARTIST seed as the title (Suno policy) — only a vibe
+  // seed is safe to reuse if the model omitted albumTitle.
+  const titleFallback = seedMode === "artist" ? "" : seed;
   return {
-    albumTitle: String(obj.albumTitle || seed || "Untitled album")
+    albumTitle: String(obj.albumTitle || titleFallback || "Untitled album")
       .trim()
       .slice(0, 60),
     soundDNA: String(obj.soundDNA || "").trim(),

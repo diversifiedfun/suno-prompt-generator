@@ -92,6 +92,35 @@ describe("planAlbum", () => {
     expect(p.tracks).toHaveLength(2);
     expect(p.tracks[0].trackTitle).toBe("Taillights");
   });
+
+  it("online: an omitted albumTitle never leaks a raw artist seed", async () => {
+    const fetchFn = async () => ({
+      ok: true,
+      json: async () => ({
+        content: [
+          {
+            text: JSON.stringify({
+              albumTitle: "", // model omitted it
+              soundDNA: "art rock, layered guitars, falsetto",
+              tracks: [
+                { trackTitle: "One", role: "opener", angle: "a" },
+                { trackTitle: "Two", role: "closer", angle: "b" },
+              ],
+            }),
+          },
+        ],
+      }),
+    });
+    const p = await planAlbum({
+      seed: "Radiohead",
+      seedMode: "artist",
+      trackCount: 2,
+      apiKey: "k",
+      fetchFn,
+    });
+    expect(p.albumTitle.toLowerCase()).not.toContain("radiohead");
+    expect(p.albumTitle).toBe("Untitled album");
+  });
 });
 
 describe("generateAlbumTrack", () => {

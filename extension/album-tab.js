@@ -283,8 +283,9 @@ async function startGenerateAll(alb) {
   c.textContent = "";
   const status = el("p", "settings-status");
   c.appendChild(status);
-  // Everything that can throw lives inside try/finally so `busy` always resets —
-  // getSettings() rejecting must not permanently lock generation.
+  // Every await runs inside try/finally so `busy` always resets — getSettings()
+  // rejecting must not permanently lock generation. (The synchronous DOM setup
+  // above touches only static ids and doesn't throw.)
   try {
     const { apiKey, model } = await getSettings();
     const done = [];
