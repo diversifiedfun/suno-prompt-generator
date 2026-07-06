@@ -140,7 +140,9 @@ TRACK COUNT: ${count} — output EXACTLY ${count} tracks.`;
         maxTokens: 3072,
       }),
     );
-    if (!Array.isArray(obj.tracks) || !obj.tracks.length)
+    // Require the exact track count on the first pass; a short list falls through
+    // to the strict retry (which gives the model a second chance to hit it).
+    if (!Array.isArray(obj.tracks) || obj.tracks.length !== count)
       throw new Error("bad shape");
     return normalizeAlbumPlan(obj, seed, mode, count);
   } catch (err) {
@@ -213,7 +215,12 @@ export function offlineAlbumPlan(seed, seedMode, mode, trackCount) {
     angle: "",
   }));
   return {
-    albumTitle: (clean || "Untitled album").slice(0, 60),
+    // NEVER surface a raw artist seed as the title (Suno policy — same reason
+    // soundDNA is decomposed above). Vibe seeds are safe to reuse as a title.
+    albumTitle: (seedMode === "artist"
+      ? "Untitled album"
+      : clean || "Untitled album"
+    ).slice(0, 60),
     soundDNA,
     exclude: "",
     tracks,

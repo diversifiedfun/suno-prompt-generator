@@ -27,6 +27,9 @@ let currentAlbumId = null;
 const state = { seedMode: "vibe", albumType: "cohesive" };
 // Autocomplete handle (set once the tab inits) so the mode toggle can close it.
 let seedAc = { hide() {} };
+// Serializes generation so two overlapping regenerate/generate-all clicks can't
+// race read-modify-write on the tracks array and lose each other's updates.
+let busy = false;
 
 export function renderAlbumTab() {
   if ($a("album-stage-a").dataset.init) {
@@ -273,6 +276,8 @@ async function onPlanAlbumReplan() {
 }
 
 async function startGenerateAll(alb) {
+  if (busy) return; // one generation loop at a time (no concurrent writes)
+  busy = true;
   showStage("c");
   const c = $a("album-stage-c");
   c.textContent = "";
@@ -280,21 +285,26 @@ async function startGenerateAll(alb) {
   c.appendChild(status);
   const { apiKey, model } = await getSettings();
   const done = [];
-  for (let i = 0; i < alb.tracks.length; i++) {
-    status.textContent = `Generating track ${i + 1} of ${alb.tracks.length}…`;
-    const track = await generateAlbumTrack({
-      album: alb,
-      brief: alb.tracks[i].brief,
-      apiKey,
-      model,
-    });
-    done.push({ ...alb.tracks[i], ...track, status: "generated" });
-    await updateAlbum(alb.id, {
-      tracks: [...done, ...alb.tracks.slice(i + 1)],
-    });
+  try {
+    for (let i = 0; i < alb.tracks.length; i++) {
+      status.textContent = `Generating track ${i + 1} of ${alb.tracks.length}…`;
+      const track = await generateAlbumTrack({
+        album: alb,
+        brief: alb.tracks[i].brief,
+        apiKey,
+        model,
+      });
+      done.push({ ...alb.tracks[i], ...track, status: "generated" });
+      await updateAlbum(alb.id, {
+        tracks: [...done, ...alb.tracks.slice(i + 1)],
+      });
+    }
+  } finally {
+    busy = false;
   }
   status.textContent = "";
-  renderAlbumTracks(await getAlbum(alb.id));
+  // Only repaint if the user is still on this album (they may have opened another).
+  if (currentAlbumId === alb.id) renderAlbumTracks(await getAlbum(alb.id));
 }
 
 // Stage C — generated tracks with per-field copy + paste.
@@ -395,19 +405,25 @@ function buildAlbumTrackCard(t, i) {
 }
 
 async function regenerateOne(i) {
-  const alb = await getAlbum(currentAlbumId);
-  const { apiKey, model } = await getSettings();
-  const track = await generateAlbumTrack({
-    album: alb,
-    brief: alb.tracks[i].brief,
-    apiKey,
-    model,
-  });
-  const tracks = alb.tracks.map((tt, idx) =>
-    idx === i ? { ...tt, ...track, status: "generated" } : tt,
-  );
-  await updateAlbum(currentAlbumId, { tracks });
-  renderAlbumTracks(await getAlbum(currentAlbumId));
+  if (busy) return; // don't race another in-flight generation
+  busy = true;
+  try {
+    const alb = await getAlbum(currentAlbumId);
+    const { apiKey, model } = await getSettings();
+    const track = await generateAlbumTrack({
+      album: alb,
+      brief: alb.tracks[i].brief,
+      apiKey,
+      model,
+    });
+    const tracks = alb.tracks.map((tt, idx) =>
+      idx === i ? { ...tt, ...track, status: "generated" } : tt,
+    );
+    await updateAlbum(currentAlbumId, { tracks });
+    renderAlbumTracks(await getAlbum(currentAlbumId));
+  } finally {
+    busy = false;
+  }
 }
 
 // Fill an open suno.com tab with one album track (title/style/exclude/lyrics +

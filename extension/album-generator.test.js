@@ -29,9 +29,14 @@ describe("offlineAlbumPlan", () => {
     expect(p.tracks).toHaveLength(5);
     expect(p.tracks.every((t) => /chapter/.test(t.role))).toBe(true);
   });
-  it("artist seed keeps the name out of the soundDNA", () => {
+  it("artist seed keeps the name out of the soundDNA AND the title", () => {
     const p = offlineAlbumPlan("Radiohead", "artist", "cohesive", 8);
     expect(p.soundDNA.toLowerCase()).not.toContain("radiohead");
+    expect(p.albumTitle.toLowerCase()).not.toContain("radiohead");
+  });
+  it("vibe seed is fine to reuse as the album title", () => {
+    const p = offlineAlbumPlan("neon rain", "vibe", "cohesive", 6);
+    expect(p.albumTitle).toBe("neon rain");
   });
 });
 
