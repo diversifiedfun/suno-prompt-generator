@@ -45,6 +45,8 @@ import {
   filterSelectOptions,
 } from "./dom-utils.js";
 import { renderSetTab } from "./set-tab.js";
+import { rankSuggestions } from "./fuzzy.js";
+import { ARTISTS, VIBE_WORDS } from "./suggest-data.js";
 
 // ---------------------------------------------------------------------------
 // Tab routing
@@ -681,14 +683,119 @@ function setMode(mode) {
   document
     .getElementById("gen-artist-note")
     .classList.toggle("hidden", mode !== "artist");
+  hideSuggest(); // pool changed — drop stale suggestions
   uiState = { ...uiState, gen: { ...uiState.gen, mode } };
   persistUi();
 }
 
-// Persist the vibe/artist input as the user types so a reopen restores it.
+// ---------------------------------------------------------------------------
+// Vibe-tab autocomplete — a fuzzy dropdown of artists (Artist mode) or vibe/
+// genre words (Vibe mode) to help when you can't spell the whole thing. Local
+// and offline; Artist mode still decomposes the name, never emits it.
+// ---------------------------------------------------------------------------
+
+const SUGGEST_ARTISTS = [...new Set(ARTISTS)];
+const SUGGEST_VIBES = [...new Set(VIBE_WORDS)];
+let suggestItems = [];
+let suggestActive = -1;
+
+// In Vibe mode people type comma-separated terms, so match only the segment
+// being typed; in Artist mode match the whole field.
+function suggestQuery(value) {
+  if (genMode === "artist") return value.trim();
+  const parts = value.split(",");
+  return parts[parts.length - 1].trim();
+}
+
+function updateSuggest() {
+  const value = document.getElementById("gen-input").value;
+  const query = suggestQuery(value);
+  const pool = genMode === "artist" ? SUGGEST_ARTISTS : SUGGEST_VIBES;
+  suggestItems = query.length >= 2 ? rankSuggestions(query, pool, 8) : [];
+  suggestActive = -1;
+  renderSuggest();
+}
+
+function renderSuggest() {
+  const box = document.getElementById("gen-suggest");
+  box.textContent = "";
+  if (!suggestItems.length) {
+    box.classList.add("hidden");
+    return;
+  }
+  suggestItems.forEach((item, i) => {
+    const row = el(
+      "div",
+      "suggest-item" + (i === suggestActive ? " active" : ""),
+      item,
+    );
+    row.setAttribute("role", "option");
+    // mousedown (not click) so it fires before the textarea's blur; preventDefault
+    // keeps focus in the field.
+    row.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      chooseSuggest(item);
+    });
+    box.appendChild(row);
+  });
+  box.classList.remove("hidden");
+}
+
+function chooseSuggest(item) {
+  const input = document.getElementById("gen-input");
+  if (genMode === "artist") {
+    input.value = item;
+  } else {
+    const parts = input.value.split(",");
+    parts[parts.length - 1] = ` ${item}`;
+    input.value = parts.join(",").replace(/^\s+/, "");
+  }
+  uiState = { ...uiState, gen: { ...uiState.gen, input: input.value } };
+  persistUi();
+  hideSuggest();
+  input.focus();
+}
+
+function hideSuggest() {
+  suggestItems = [];
+  suggestActive = -1;
+  const box = document.getElementById("gen-suggest");
+  box.textContent = "";
+  box.classList.add("hidden");
+}
+
+// Persist the vibe/artist input as the user types so a reopen restores it, and
+// refresh the autocomplete.
 document.getElementById("gen-input").addEventListener("input", (e) => {
   uiState = { ...uiState, gen: { ...uiState.gen, input: e.target.value } };
   persistUi();
+  updateSuggest();
+});
+
+// Keyboard nav while the dropdown is open.
+document.getElementById("gen-input").addEventListener("keydown", (e) => {
+  if (!suggestItems.length) return;
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    suggestActive = (suggestActive + 1) % suggestItems.length;
+    renderSuggest();
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    suggestActive =
+      (suggestActive - 1 + suggestItems.length) % suggestItems.length;
+    renderSuggest();
+  } else if (e.key === "Enter" && suggestActive >= 0) {
+    e.preventDefault();
+    chooseSuggest(suggestItems[suggestActive]);
+  } else if (e.key === "Escape") {
+    hideSuggest();
+  }
+});
+
+// Close the dropdown when focus leaves the field (delayed so an item mousedown
+// still registers).
+document.getElementById("gen-input").addEventListener("blur", () => {
+  setTimeout(hideSuggest, 150);
 });
 
 // Persist the "what it's about" subject the same way.

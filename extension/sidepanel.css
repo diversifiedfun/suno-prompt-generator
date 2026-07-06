@@ -344,6 +344,29 @@ textarea {
   min-width: 0;
 }
 
+/* Vibe-tab autocomplete dropdown (in-flow under the textarea). */
+.suggest {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.suggest-item {
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.suggest-item:last-child {
+  border-bottom: none;
+}
+.suggest-item:hover,
+.suggest-item.active {
+  background: rgba(255, 143, 196, 0.16);
+}
+
 /* ---- Warnings ---- */
 .warn {
   border-radius: var(--radius);
