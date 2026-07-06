@@ -169,7 +169,9 @@ async function onPlanAlbum() {
     seedMode: state.seedMode,
     mode: state.albumType,
     trackCount,
-    title: seed.slice(0, 40),
+    // Don't persist a raw artist seed as the title even transiently (before the
+    // plan's title overwrites it) — Suno policy. Vibe seeds are safe.
+    title: state.seedMode === "artist" ? "New album" : seed.slice(0, 40),
   });
   currentAlbumId = album.id;
   $a("album-status").textContent = "Designing the album…";
