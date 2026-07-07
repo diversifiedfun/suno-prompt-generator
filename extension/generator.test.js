@@ -12,9 +12,12 @@ describe("vocal delivery-mode lyric guidance", () => {
     // tested gerund forms, not bare inline verbs
     expect(SYSTEM_PROMPT).toContain("[Belting] not [Belt]");
     expect(SYSTEM_PROMPT).toContain("[Chorus] [Belting, Powerful]");
-    // delivery modes are NOT listed as momentary inline FX
-    expect(SYSTEM_PROMPT).not.toMatch(/MOMENTARY[^\n]*\[Belt\]/);
-    expect(SYSTEM_PROMPT).not.toMatch(/MOMENTARY[^\n]*\[Whisper\]/);
+    // the momentary inline-FX example list excludes delivery modes (belt/whisper/spoken)
+    expect(SYSTEM_PROMPT).toContain(
+      "(e.g. [Vocal Chop], [Stutter], [Harmonies])",
+    );
+    // spoken-word is routed through the delivery rule with its tested form
+    expect(SYSTEM_PROMPT).toContain("[Spoken Word] not [Spoken]");
   });
 });
 
