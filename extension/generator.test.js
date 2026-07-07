@@ -4,7 +4,28 @@ import {
   offlineGenerate,
   offlineTitle,
   generatePrompt,
+  SYSTEM_PROMPT,
 } from "./generator.js";
+
+describe("vocal delivery-mode lyric guidance", () => {
+  it("routes delivery modes to tested section-header tags, not inline cues", () => {
+    // tested gerund forms, not bare inline verbs
+    expect(SYSTEM_PROMPT).toContain("[Belting] not [Belt]");
+    expect(SYSTEM_PROMPT).toContain("[Chorus] [Belting, Powerful]");
+    // delivery modes are NOT listed as momentary inline FX
+    expect(SYSTEM_PROMPT).not.toMatch(/MOMENTARY[^\n]*\[Belt\]/);
+    expect(SYSTEM_PROMPT).not.toMatch(/MOMENTARY[^\n]*\[Whisper\]/);
+  });
+});
+
+describe("lyric-craft + placebo guidance", () => {
+  it("carries syllable, rhyme, pronunciation, and placebo-ban rules", () => {
+    expect(SYSTEM_PROMPT).toContain("±2"); // syllable evenness
+    expect(SYSTEM_PROMPT).toMatch(/slant/i); // rhyme guidance
+    expect(SYSTEM_PROMPT).toMatch(/respell/i); // pronunciation
+    expect(SYSTEM_PROMPT).toContain("[Reverb: 30%]"); // named placebo to avoid
+  });
+});
 
 describe("buildUserMessage", () => {
   it("omits the subject line when no subject is given", () => {
