@@ -16,6 +16,7 @@ import {
   clampCount,
 } from "./album-generator.js";
 import { getSettings, getAllVibes, getAllPrompts } from "./storage.js";
+import { driveSunoSliders, sliderPasteMessage } from "./suno-slider-driver.js";
 import { attachAutocomplete } from "./autocomplete.js";
 import { ARTISTS, VIBE_WORDS } from "./suggest-data.js";
 
@@ -472,8 +473,13 @@ async function pasteAlbumTrack(track) {
     }
   }
   if (resp && resp.ok) {
-    setStatus("Pasted into Suno — check the sliders, then hit Create.");
     chrome.tabs.update(tabId, { active: true });
+    const values = {
+      weirdness: track.weirdness,
+      styleInfluence: track.styleInfluence,
+    };
+    const sliderResult = await driveSunoSliders(tabId, values);
+    setStatus(sliderPasteMessage(sliderResult, values));
   } else {
     setStatus((resp && resp.error) || "Couldn't fill Suno's fields.");
   }
