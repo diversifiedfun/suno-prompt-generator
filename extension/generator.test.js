@@ -8,16 +8,16 @@ import {
 } from "./generator.js";
 
 describe("vocal delivery-mode lyric guidance", () => {
-  it("routes delivery modes to tested section-header tags, not inline cues", () => {
-    // tested gerund forms, not bare inline verbs
-    expect(SYSTEM_PROMPT).toContain("[Belting] not [Belt]");
-    expect(SYSTEM_PROMPT).toContain("[Chorus] [Belting, Powerful]");
-    // the momentary inline-FX example list excludes delivery modes (belt/whisper/spoken)
+  it("keeps delivery in the Style field and out of second brackets", () => {
+    expect(SYSTEM_PROMPT).toContain("the STYLE field is the reliable lever");
+    // warns about the exact form that gets sung aloud
+    expect(SYSTEM_PROMPT).toContain("gets SUNG out loud as lyrics");
+    // the discredited second-bracket form must NOT be recommended
+    expect(SYSTEM_PROMPT).not.toContain("[Chorus] [Belting, Powerful]");
+    // the momentary inline-FX example list is unchanged
     expect(SYSTEM_PROMPT).toContain(
       "(e.g. [Vocal Chop], [Stutter], [Harmonies])",
     );
-    // spoken-word is routed through the delivery rule with its tested form
-    expect(SYSTEM_PROMPT).toContain("[Spoken Word] not [Spoken]");
   });
 });
 

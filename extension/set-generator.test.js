@@ -24,8 +24,9 @@ import {
 
 describe("vocal delivery-mode lyric guidance", () => {
   it("routes delivery modes to tested section-header tags, not inline cues", () => {
-    expect(TRACK_SYSTEM).toContain("[Belting] not [Belt]");
-    expect(TRACK_SYSTEM).toContain("[Chorus] [Belting, Powerful]");
+    expect(TRACK_SYSTEM).toContain("the STYLE field is the reliable lever");
+    expect(TRACK_SYSTEM).toContain("gets SUNG out loud as lyrics");
+    expect(TRACK_SYSTEM).not.toContain("[Chorus] [Belting, Powerful]");
   });
 
   it("carries lyric-craft + placebo-ban rules", () => {
