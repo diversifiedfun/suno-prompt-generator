@@ -9,6 +9,7 @@ import {
   generateTrack,
   estimateSet,
   CREDITS_PER_TRACK,
+  TRACK_SYSTEM,
   resampleContour,
   phaseLabels,
   writesLyrics,
@@ -20,6 +21,20 @@ import {
   bpmForPreset,
   motifTargets,
 } from "./set-generator.js";
+
+describe("vocal delivery-mode lyric guidance", () => {
+  it("routes delivery modes to tested section-header tags, not inline cues", () => {
+    expect(TRACK_SYSTEM).toContain("the STYLE field is the reliable lever");
+    expect(TRACK_SYSTEM).toContain("gets SUNG out loud as lyrics");
+    expect(TRACK_SYSTEM).not.toContain("[Chorus] [Belting, Powerful]");
+  });
+
+  it("carries lyric-craft + placebo-ban rules", () => {
+    expect(TRACK_SYSTEM).toContain("±2");
+    expect(TRACK_SYSTEM).toMatch(/slant/i);
+    expect(TRACK_SYSTEM).toContain("[Reverb: 30%]");
+  });
+});
 
 // Fake Anthropic response helper.
 const fakeFetch = (jsonText) => async () => ({

@@ -5,7 +5,24 @@ import {
   offlineAlbumTrack,
   planAlbum,
   generateAlbumTrack,
+  TRACK_SYSTEM,
 } from "./album-generator.js";
+
+describe("vocal delivery-mode lyric guidance", () => {
+  it("routes delivery modes to tested section-header tags, not inline cues", () => {
+    expect(TRACK_SYSTEM).toContain("the STYLE field is the reliable lever");
+    expect(TRACK_SYSTEM).toContain("gets SUNG out loud as lyrics");
+    expect(TRACK_SYSTEM).not.toContain("[Chorus] [Belting, Powerful]");
+    // delivery modes are NOT offered as momentary inline FX
+    expect(TRACK_SYSTEM).toContain("[Vocal Chop], [Harmonies]");
+  });
+
+  it("carries lyric-craft + placebo-ban rules", () => {
+    expect(TRACK_SYSTEM).toContain("±2");
+    expect(TRACK_SYSTEM).toMatch(/slant/i);
+    expect(TRACK_SYSTEM).toContain("[Reverb: 30%]");
+  });
+});
 
 describe("clampCount", () => {
   it("clamps to 3..20 and defaults to 10", () => {

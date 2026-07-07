@@ -4,7 +4,31 @@ import {
   offlineGenerate,
   offlineTitle,
   generatePrompt,
+  SYSTEM_PROMPT,
 } from "./generator.js";
+
+describe("vocal delivery-mode lyric guidance", () => {
+  it("keeps delivery in the Style field and out of second brackets", () => {
+    expect(SYSTEM_PROMPT).toContain("the STYLE field is the reliable lever");
+    // warns about the exact form that gets sung aloud
+    expect(SYSTEM_PROMPT).toContain("gets SUNG out loud as lyrics");
+    // the discredited second-bracket form must NOT be recommended
+    expect(SYSTEM_PROMPT).not.toContain("[Chorus] [Belting, Powerful]");
+    // the momentary inline-FX example list is unchanged
+    expect(SYSTEM_PROMPT).toContain(
+      "(e.g. [Vocal Chop], [Stutter], [Harmonies])",
+    );
+  });
+});
+
+describe("lyric-craft + placebo guidance", () => {
+  it("carries syllable, rhyme, pronunciation, and placebo-ban rules", () => {
+    expect(SYSTEM_PROMPT).toContain("±2"); // syllable evenness
+    expect(SYSTEM_PROMPT).toMatch(/slant/i); // rhyme guidance
+    expect(SYSTEM_PROMPT).toMatch(/respell/i); // pronunciation
+    expect(SYSTEM_PROMPT).toContain("[Reverb: 30%]"); // named placebo to avoid
+  });
+});
 
 describe("buildUserMessage", () => {
   it("omits the subject line when no subject is given", () => {
