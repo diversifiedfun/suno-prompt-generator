@@ -44,6 +44,7 @@ import {
   safeHref,
   filterSelectOptions,
 } from "./dom-utils.js";
+import { driveSunoSliders, sliderPasteMessage } from "./suno-slider-driver.js";
 import { renderSetTab } from "./set-tab.js";
 import { renderAlbumTab } from "./album-tab.js";
 import { attachAutocomplete } from "./autocomplete.js";
@@ -992,8 +993,13 @@ async function pasteVibeIntoSuno(result, statusEl) {
     }
   }
   if (resp && resp.ok) {
-    setStatus("Pasted into Suno — check the sliders match, then hit Create.");
     chrome.tabs.update(tabId, { active: true });
+    const values = {
+      weirdness: result.weirdness,
+      styleInfluence: result.styleInfluence,
+    };
+    const sliderResult = await driveSunoSliders(tabId, values);
+    setStatus(sliderPasteMessage(sliderResult, values));
   } else {
     setStatus((resp && resp.error) || "Couldn't fill Suno's fields.");
   }

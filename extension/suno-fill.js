@@ -56,22 +56,10 @@ function setNativeValue(el, value) {
   el.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-// Best-effort slider setter: match a native range input by its aria-label
-// keyword and set it. Suno's Weirdness / Style Influence controls may be custom
-// (non-range) widgets — if so this finds nothing and skips, so paste never fails
-// on their account. Returns true only if a slider was actually set.
-function setSlider(keyword, pct) {
-  const val = String(pct == null ? "" : pct).trim();
-  if (val === "") return false;
-  for (const r of document.querySelectorAll('input[type="range"]')) {
-    const aria = (r.getAttribute("aria-label") || "").toLowerCase();
-    if (aria.includes(keyword)) {
-      setNativeValue(r, val);
-      return true;
-    }
-  }
-  return false;
-}
+// NOTE: Weirdness / Style Influence are NOT set here. Suno renders them as custom
+// `<div role="slider">` widgets that ignore synthetic events — they only move on a
+// trusted gesture. Those are driven from the side panel via the chrome.debugger
+// (CDP) path in suno-slider-driver.js, after this text fill completes.
 
 function sunoFillHandler(msg, _sender, sendResponse) {
   if (msg.type !== "suno-fill") return;
@@ -95,9 +83,6 @@ function sunoFillHandler(msg, _sender, sendResponse) {
     const excludeEl = findField(EXCLUDE_SELECTORS);
     if (excludeEl) setNativeValue(excludeEl, msg.exclude);
   }
-  // Best-effort sliders (may be no-ops if Suno uses custom widgets).
-  setSlider("weird", msg.weirdness);
-  setSlider("influence", msg.styleInfluence);
   styleEl.scrollIntoView({ behavior: "smooth", block: "center" });
   sendResponse({ ok: true });
   return true; // async-safe
