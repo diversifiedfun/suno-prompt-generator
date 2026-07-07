@@ -88,10 +88,28 @@ reliably. **Official glossary + Confirmed community list.**
   (gender + register + region + genre). Geography shifts inflection. **Confirmed.**
 - Expression/SFX: `[Whispers] [Sighs] [Screams] [Spoken word]`, `[Applause] [Phone ringing]`
   etc. **Anecdotal (observed behavior).**
-- In-lyric dynamics: stretch a vowel `goo-o-o-odbye` to sustain a note; wrap syllables in
-  `(parens)` for a background/harmony layer. **Anecdotal.**
-- Inline performance cues `(whispered) (belt) (falsetto)` reportedly ~90% recognized in
-  v5.5. **Anecdotal.**
+- In-lyric emphasis: stretch a vowel `goo-o-o-odbye` for melisma; ALL CAPS = louder word;
+  ellipses `I... need... you` = dramatic pauses. **Confirmed.**
+- **VOCAL DELIVERY belongs in the STYLE field — lyric-field cues are unreliable.**
+  ⚠️ CONFIRMED on real Nova Reign generations (2026-07-06), superseding the old "~90% recognized"
+  claim: mid-line `(whispered) lyric` → **IGNORED**; bare inline `[Belt]` → **IGNORED**;
+  two-bracket `[Chorus] [Belting, Powerful]` / `[Verse] [Soft, Intimate]` → Suno **SANG the
+  descriptor OUT LOUD** as lyrics. Put delivery per-section in the STYLE ("breathy intimate
+  verses building to a belted chorus, stripped whispered bridge"). In the LYRICS the only
+  reliable per-section cue is a **SHORT parenthetical on its OWN line** under a PLAIN section
+  tag — `[Bridge]` / `(whispered)` / lyric. Never a second bracket after a section tag, never
+  glue the cue to a lyric line, ≤2–3 cues/song. **Confirmed.**
+- **Placebo tags — NEVER emit.** Numeric/parameter tags `[Reverb: 30%]`, `[Bass: 80%]`,
+  `[Compression: Medium]`, `[Stereo Width: Wide]` do nothing (Suno reads descriptions, not DAW
+  knobs). Use words: `reverb-drenched`, `bass-forward`, `compressed vocals`, `wide stereo`.
+  **Confirmed** (HookGenius 400+ gen tier list).
+- **Rhyme:** ABAB interlocking + SLANT / near rhymes (love/enough/rough) beat sing-song AABB
+  perfect rhymes, which trigger nursery-rhyme melodies and read AI-written. **Confirmed.**
+- **Syllable ±2:** keep every line within ±2 syllables of the section's count; cramming makes
+  Suno rush/glitch/"chipmunk" (a math error, not a bug). **Confirmed.**
+- **Pronunciation:** Suno sings SPELLING (no dictionary) — respell names/numbers/tricky words
+  phonetically BEFORE generating, permanent after (Evie→Ee-vee, 2am→three A-M, through→thru,
+  read[past]→red, 24/7→twenty four seven). **Confirmed.**
 
 ---
 
@@ -204,6 +222,12 @@ delivery matching emotional weight, (4) production texture. Never emotion words 
 10. **Single-generation expectation** — ~70% of first tracks need 3+ regenerations.
     Generate 3–5, iterate.
 11. **Extending without re-pasting style + BPM** → tempo drift, vocal gender switching.
+12. **Delivery cues in a second bracket** (`[Chorus] [Belting, Powerful]`) or glued to a lyric
+    line → the descriptor gets SUNG out loud, or ignored. Put delivery in STYLE; lyric cues only
+    as an own-line parenthetical. (Confirmed 2026-07-06.)
+13. **Placebo/parameter tags** (`[Reverb: 30%]`, `[Bass: 80%]`) → zero effect; use words.
+14. **Uneven syllable counts** (lines varying more than ±2 syllables) → rushed / glitch /
+    "chipmunk" vocals.
 
 **Confirmed.**
 
