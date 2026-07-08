@@ -12,13 +12,20 @@ chrome.sidePanel
   );
 
 // --- Install -----------------------------------------------------------------
-// Create the context menu once on install; recreating on every SW wake would
-// cause "duplicate ID" errors in Chrome.
+// Register the context menu on install/update. onInstalled fires again on every
+// unpacked-extension RELOAD, and the previous item can still exist — calling
+// create() with the same id then throws "Cannot create item with duplicate id",
+// which flags the whole extension as errored. removeAll() first makes this
+// idempotent and error-free across reloads.
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: "save-suno-prompt",
-    title: "Save selection as Suno prompt",
-    contexts: ["selection"],
+  chrome.contextMenus.removeAll(() => {
+    // Read lastError so removeAll's callback doesn't surface an unchecked warning.
+    void chrome.runtime.lastError;
+    chrome.contextMenus.create({
+      id: "save-suno-prompt",
+      title: "Save selection as Suno prompt",
+      contexts: ["selection"],
+    });
   });
 });
 
