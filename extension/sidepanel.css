@@ -1,15 +1,15 @@
 /* sidepanel.css — synthwave dark, adapted for ~380px side panel. */
 
 :root {
-  --bg: #0a0a12;
-  --bg-panel: #12121f;
-  --bg-panel-2: #181828;
-  --ink: #ecebf5;
-  --ink-dim: #8d8ba8;
-  --ink-faint: #5a5872;
-  --line: #262438;
+  --bg: #0e0a1a;
+  --bg-panel: #171029;
+  --bg-panel-2: #120c22;
+  --ink: #efe8ff;
+  --ink-dim: #9488b5;
+  --ink-faint: #6d6390;
+  --line: #2a2044;
   --magenta: #ff3d9a;
-  --cyan: #29e7e7;
+  --cyan: #2de2e6;
   --amber: #ffb347;
   --green: #5ce98a;
   --red: #ff5c6c;
@@ -42,10 +42,7 @@ h1 {
   font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: linear-gradient(92deg, var(--magenta), var(--cyan));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--magenta);
 }
 
 /* ---- Tab bar ---- */
@@ -91,7 +88,8 @@ h1 {
 
 .tab-btn.active {
   color: var(--ink);
-  background: linear-gradient(180deg, rgba(255,61,154,0.14), rgba(255,61,154,0.03));
+  background: transparent;
+  border-bottom-width: 2px;
   border-bottom-color: var(--magenta);
 }
 
@@ -125,10 +123,10 @@ main { padding: 12px 14px 24px; }
 .field label,
 .field-label {
   display: block;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--ink-dim);
   font-family: var(--mono);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
   margin-bottom: 6px;
   text-transform: uppercase;
 }
@@ -158,8 +156,8 @@ main { padding: 12px 14px 24px; }
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--magenta), var(--cyan));
-  color: #0a0a12;
+  background: var(--magenta);
+  color: #160910;
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 800;
@@ -188,7 +186,7 @@ textarea {
 input[type="text"]:focus,
 input[type="password"]:focus,
 select:focus,
-textarea:focus { border-color: var(--cyan); }
+textarea:focus { border-color: var(--magenta); }
 
 textarea {
   font-family: var(--mono);
@@ -223,9 +221,9 @@ textarea {
 .chip:hover { border-color: var(--magenta); color: var(--ink); }
 
 .chip.on {
-  background: linear-gradient(92deg, rgba(255,61,154,0.22), rgba(41,231,231,0.18));
+  background: var(--magenta);
   border-color: var(--magenta);
-  color: #fff;
+  color: #160910;
   font-weight: 500;
 }
 
@@ -294,12 +292,12 @@ textarea {
   transition: all 0.12s ease;
 }
 
-.btn:hover { border-color: var(--cyan); }
+.btn:hover { border-color: var(--magenta); }
 
 .btn.primary {
-  background: linear-gradient(92deg, var(--magenta), #ff6fae);
+  background: var(--magenta);
   border-color: transparent;
-  color: #fff;
+  color: #160910;
   font-weight: 600;
 }
 
@@ -425,8 +423,8 @@ textarea {
 }
 
 .mode-btn.active {
-  background: linear-gradient(92deg, rgba(255,61,154,0.3), rgba(41,231,231,0.2));
-  color: #fff;
+  background: var(--magenta);
+  color: #160910;
 }
 
 /* ---- Style picker toggle (Vibe results — Main / Variant N) ---- */
@@ -563,7 +561,7 @@ textarea {
   color: var(--ink);
 }
 
-.riff-input:focus { border-color: var(--cyan); outline: none; }
+.riff-input:focus { border-color: var(--magenta); outline: none; }
 
 /* ---- Library cards ---- */
 .prompt-list {
@@ -624,7 +622,7 @@ textarea {
 }
 
 .prompt-card-source a {
-  color: var(--cyan);
+  color: var(--magenta);
   text-decoration: none;
 }
 
@@ -730,7 +728,7 @@ textarea {
   transition: all 0.12s ease;
 }
 .occasion-card:hover {
-  border-color: var(--cyan);
+  border-color: var(--magenta);
   color: var(--ink);
   transform: translateY(-1px);
 }
@@ -739,10 +737,10 @@ textarea {
   transition: transform 0.12s ease;
 }
 .occasion-card.on {
-  border-color: var(--cyan);
-  background: rgba(41, 231, 231, 0.14);
+  border-color: var(--magenta);
+  background: rgba(255, 61, 154, 0.14);
   color: #fff;
-  box-shadow: 0 0 0 1px rgba(41, 231, 231, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 61, 154, 0.35);
 }
 .occasion-card.on .emoji { transform: scale(1.08); }
 
@@ -780,10 +778,10 @@ textarea {
   font-family: var(--sans);
   transition: all 0.12s ease;
 }
-.dial-btn:hover { border-color: var(--cyan); color: var(--ink); }
+.dial-btn:hover { border-color: var(--magenta); color: var(--ink); }
 .dial-btn.active {
-  border-color: var(--cyan);
-  background: rgba(41, 231, 231, 0.16);
+  border-color: var(--magenta);
+  background: rgba(255, 61, 154, 0.16);
   color: #fff;
   font-weight: 600;
 }
@@ -809,9 +807,9 @@ textarea {
 }
 .madlib .blank {
   border: none;
-  border-bottom: 1px dashed var(--cyan);
+  border-bottom: 1px dashed var(--magenta);
   background: transparent;
-  color: var(--cyan);
+  color: var(--magenta);
   font: inherit;
   font-weight: 600;
   padding: 0 4px;
@@ -819,20 +817,20 @@ textarea {
   border-radius: 2px;
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
-.madlib .blank:hover { background: rgba(41, 231, 231, 0.08); }
+.madlib .blank:hover { background: rgba(255, 61, 154, 0.08); }
 .madlib .blank:focus {
   outline: none;
   border-bottom-style: solid;
-  background: rgba(41, 231, 231, 0.12);
+  background: rgba(255, 61, 154, 0.12);
 }
 .madlib .blank-select {
   display: inline-block;
   vertical-align: baseline;
   max-width: 100%;
   border: none;
-  border-bottom: 1px dashed var(--cyan);
-  background: rgba(41, 231, 231, 0.06);
-  color: var(--cyan);
+  border-bottom: 1px dashed var(--magenta);
+  background-color: rgba(255, 61, 154, 0.06);
+  color: var(--magenta);
   font: inherit;
   font-weight: 600;
   font-size: 13px;
@@ -842,18 +840,17 @@ textarea {
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--cyan) 50%),
-    linear-gradient(135deg, var(--cyan) 50%, transparent 50%);
-  background-position: calc(100% - 11px) center, calc(100% - 6px) center;
-  background-size: 5px 5px, 5px 5px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23ff3d9a'/%3E%3C/svg%3E");
+  background-position: calc(100% - 6px) center;
+  background-size: 9px 6px;
   background-repeat: no-repeat;
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
-.madlib .blank-select:hover { background-color: rgba(41, 231, 231, 0.14); }
+.madlib .blank-select:hover { background-color: rgba(255, 61, 154, 0.14); }
 .madlib .blank-select:focus {
   outline: none;
   border-bottom-style: solid;
-  background-color: rgba(41, 231, 231, 0.18);
+  background-color: rgba(255, 61, 154, 0.18);
 }
 #set-finetune {
   margin: 10px 0;
@@ -904,7 +901,7 @@ textarea {
   padding: 10px 8px 6px;
 }
 .journey-bar .bar {
-  background: linear-gradient(180deg, var(--magenta), var(--cyan));
+  background: var(--cyan);
   opacity: 0.85;
 }
 .journey-bar .phase {
@@ -994,7 +991,7 @@ textarea {
   padding: 8px 10px;
 }
 .myset-row:hover {
-  border-color: var(--cyan);
+  border-color: var(--magenta);
 }
 .myset-info {
   display: flex;
@@ -1032,7 +1029,7 @@ textarea {
 }
 .set-progress-fill {
   height: 100%;
-  background: linear-gradient(92deg, var(--magenta), var(--cyan));
+  background: var(--cyan);
   opacity: 0.8;
   transition: width 0.2s ease;
 }
@@ -1064,7 +1061,7 @@ textarea {
   cursor: pointer;
   padding: 8px 0;
   font-size: 12px;
-  color: var(--cyan);
+  color: var(--magenta);
   font-family: var(--mono);
   letter-spacing: 0.02em;
   list-style: none;
@@ -1092,7 +1089,7 @@ textarea {
   gap: 8px;
   padding: 10px 12px;
   margin: 0;
-  background: linear-gradient(92deg, rgba(255,61,154,0.14), rgba(41,231,231,0.12));
+  background: rgba(255, 61, 154, 0.12);
   border-bottom: 1px solid var(--line);
   font-size: 12px;
   line-height: 1.5;
@@ -1106,7 +1103,7 @@ textarea {
   border: none;
   padding: 0;
   margin-left: 2px;
-  color: var(--cyan);
+  color: var(--magenta);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
