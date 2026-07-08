@@ -1317,6 +1317,8 @@ async function initFirstRunBanner() {
   document.getElementById("first-run-key")?.addEventListener("click", () => {
     document.querySelector('.tab-btn[data-tab="settings"]')?.click();
     document.getElementById("settings-apikey")?.focus();
+    const help = document.getElementById("settings-help");
+    if (help) help.open = true;
   });
   document
     .getElementById("first-run-dismiss")

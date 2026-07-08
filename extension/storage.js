@@ -162,6 +162,10 @@ export async function setSettings(patch) {
   const current = await getSettings();
   // Spread so callers can update one field without clobbering the other
   const next = { ...current, ...patch };
+  // Trim defensively so the stored value is clean at rest — a pasted key with
+  // trailing whitespace/newline otherwise silently 401s and reads as "Invalid
+  // API key". Model is left untouched.
+  next.apiKey = String(next.apiKey ?? "").trim();
   // Guard: never accidentally log or expose apiKey in error messages
   await storageSet({ [SETTINGS_KEY]: next });
 }

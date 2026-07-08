@@ -6,6 +6,8 @@ import {
   deleteVibe,
   getUiState,
   saveUiState,
+  getSettings,
+  setSettings,
 } from "./storage.js";
 
 beforeEach(() => installChromeMock());
@@ -38,6 +40,22 @@ describe("saved vibes", () => {
     all = await getAllVibes();
     expect(all.map((v) => v.name)).toEqual(["B"]);
     expect(all.some((v) => v.id === b.id)).toBe(true);
+  });
+});
+
+describe("settings", () => {
+  it("trims surrounding whitespace from a saved api key", async () => {
+    await setSettings({ apiKey: "  sk-ant-abc123  \n" });
+    const s = await getSettings();
+    expect(s.apiKey).toBe("sk-ant-abc123");
+  });
+
+  it("updating only the model does not clobber an existing trimmed key", async () => {
+    await setSettings({ apiKey: "sk-ant-abc123" });
+    await setSettings({ model: "claude-haiku" });
+    const s = await getSettings();
+    expect(s.apiKey).toBe("sk-ant-abc123");
+    expect(s.model).toBe("claude-haiku");
   });
 });
 

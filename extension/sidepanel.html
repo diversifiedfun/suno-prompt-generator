@@ -40,7 +40,7 @@
 
   <div id="first-run-banner" class="first-run hidden" role="note">
     <div class="first-run-body">
-      <strong>👋 New here?</strong> To write real songs you'll need two free-to-start things:
+      <strong>👋 New here?</strong> To write real songs you'll need two pay-as-you-go (~pennies) things:
       an <strong>Anthropic API key</strong> (~2 min) and a <strong>Suno account with credits</strong>.
       <button type="button" id="first-run-key" class="linklike">Set your key →</button>
     </div>
@@ -122,6 +122,8 @@
       <details class="tab-help">
         <summary>❔ How this works</summary>
         <p>Describe a scene or feeling ("rainy drive, someone left"), or switch to <strong>Artist</strong> and name a reference (it uses the *sound*, never the name). Add <strong>what it's about</strong> to get real lyrics. <strong>Generate</strong> writes a full Suno prompt — title, style, exclude, BPM, and lyrics. Needs your API key (⚙ Settings).</p>
+        <p class="hint">Paste needs a suno.com tab — logged in, on Create → Custom mode.</p>
+        <p class="hint">Chrome briefly shows a "debugging" banner while it nudges Suno's sliders — that's expected.</p>
       </details>
       <details id="vibe-saved" class="tab-help">
         <summary>📎 Saved vibes</summary>
@@ -294,6 +296,7 @@
       <div class="field">
         <label for="settings-apikey">Anthropic API key</label>
         <input type="password" id="settings-apikey" placeholder="sk-ant-…" autocomplete="off" />
+        <p class="hint">Get a key at platform.claude.com/settings/keys</p>
       </div>
       <div class="field">
         <label for="settings-model">Model</label>
@@ -306,7 +309,7 @@
       <button class="btn primary" id="settings-save">Save settings</button>
       <div id="settings-status" class="settings-status"></div>
 
-      <details class="tab-help" style="margin-top:18px">
+      <details id="settings-help" class="tab-help" style="margin-top:18px">
         <summary>❔ Getting started &amp; help</summary>
         <p><strong>Get a key (~2 min):</strong> go to platform.claude.com → sign in → add credits (pay-as-you-go, ~a few cents per set) → open platform.claude.com/settings/keys → <strong>Create Key</strong> → copy the <code>sk-ant-…</code> value → paste above → Save. Stored only in this browser, sent only to Anthropic — don't use a shared computer.</p>
         <p><strong>No key?</strong> The Vibe and Set tabs fall back to a built-in library (you'll see a note). Build and Library work fully without a key.</p>
