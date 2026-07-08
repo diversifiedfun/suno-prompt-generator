@@ -136,8 +136,16 @@
           <button class="btn" id="gen-history-clear">Clear all</button>
         </div>
       </details>
+      <div class="mode-toggle" role="group" aria-label="Generation mode">
+        <button class="mode-btn active" data-mode="vibe" id="mode-vibe">Vibe</button>
+        <button class="mode-btn" data-mode="artist" id="mode-artist">Artist</button>
+      </div>
+      <div id="gen-artist-note" class="warn amber hidden">
+        <span class="ic">!</span>
+        <span>Artist mode outputs descriptors only — never the artist's name (Suno policy).</span>
+      </div>
       <div class="field">
-        <label for="gen-input">Describe your vibe or artist reference</label>
+        <label for="gen-input" id="gen-input-label">Describe a vibe or feeling</label>
         <textarea id="gen-input" rows="3" placeholder="e.g. late night drive, melancholy…"></textarea>
         <div id="gen-suggest" class="suggest hidden" role="listbox" aria-label="Suggestions"></div>
       </div>
@@ -151,14 +159,6 @@
           Instrumental (no vocals)
           <span class="hint">(writes structure only — no lyrics, no vocal gender)</span>
         </label>
-      </div>
-      <div class="mode-toggle" role="group" aria-label="Generation mode">
-        <button class="mode-btn active" data-mode="vibe" id="mode-vibe">Vibe</button>
-        <button class="mode-btn" data-mode="artist" id="mode-artist">Artist</button>
-      </div>
-      <div id="gen-artist-note" class="warn amber hidden">
-        <span class="ic">!</span>
-        <span>Artist mode outputs descriptors only — never the artist's name (Suno policy).</span>
       </div>
       <div class="btn-row">
         <button class="btn primary" id="gen-submit">Generate</button>

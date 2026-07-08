@@ -694,6 +694,17 @@ function setMode(mode) {
   document
     .getElementById("gen-artist-note")
     .classList.toggle("hidden", mode !== "artist");
+  // Swap the input's label + placeholder so the mode visibly changes what the
+  // field expects: a feeling/scene (Vibe) vs a named artist/sound (Artist).
+  const input = document.getElementById("gen-input");
+  const label = document.getElementById("gen-input-label");
+  if (mode === "artist") {
+    input.placeholder = "e.g. Lana Del Rey, but darker — a sound, not a name";
+    if (label) label.textContent = "Name an artist or sound";
+  } else {
+    input.placeholder = "e.g. late night drive, melancholy…";
+    if (label) label.textContent = "Describe a vibe or feeling";
+  }
   genAutocomplete.hide(); // pool changed — drop stale suggestions
   uiState = { ...uiState, gen: { ...uiState.gen, mode } };
   persistUi();
