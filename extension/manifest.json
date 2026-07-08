@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Suno Prompt Studio",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "description": "Build, capture, AI-generate, and sequence Suno music prompts and sets.",
   "icons": {
     "16": "icons/icon16.png",

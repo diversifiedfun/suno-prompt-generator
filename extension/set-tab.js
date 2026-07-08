@@ -145,6 +145,7 @@ function renderOccasions() {
 
 function selectOccasion(presetKey) {
   intake.presetKey = presetKey;
+  $set("set-status").textContent = ""; // clear any "pick an occasion first" nudge
   intake.blanks = {}; // reseed defaults for the new occasion
   for (const c of $set("set-occasions").children)
     if (c.dataset && c.dataset.key)
@@ -423,6 +424,7 @@ export function renderSetTab() {
   });
   renderMySets();
   restoreFormDraft();
+  initWizard();
 }
 
 // Browse/reopen saved sets. Sets already auto-persist on every createSet/
@@ -653,10 +655,53 @@ async function onPlanSet() {
   renderMySets();
 }
 
+// --- Guided wizard (stage A): reveal one intake step at a time so the panel
+// never shows a wall of fields. All inputs stay in the DOM the whole time —
+// this only toggles which step is visible, so every $set()/intake read is
+// untouched. The occasion (step 0) is the single required choice. ---
+const WIZ_STEPS = 4;
+let wizStep = 0;
+
+function gotoWizStep(i) {
+  const dots = $set("set-wiz-dots");
+  if (!dots) return; // wizard markup absent (defensive)
+  wizStep = Math.max(0, Math.min(WIZ_STEPS - 1, i));
+  for (const s of document.querySelectorAll("#set-wiz .wiz-step"))
+    s.hidden = Number(s.dataset.step) !== wizStep;
+  const kids = dots.children;
+  for (let d = 0; d < kids.length; d++) {
+    kids[d].classList.toggle("on", d === wizStep);
+    kids[d].classList.toggle("done", d < wizStep);
+  }
+  $set("set-wiz-back").style.visibility = wizStep === 0 ? "hidden" : "visible";
+  $set("set-wiz-next").hidden = wizStep === WIZ_STEPS - 1;
+  $set("set-wiz-count").textContent = `Step ${wizStep + 1} of ${WIZ_STEPS}`;
+}
+
+function initWizard() {
+  const dots = $set("set-wiz-dots");
+  if (!dots || dots.dataset.init) return;
+  dots.dataset.init = "1";
+  for (let i = 0; i < WIZ_STEPS; i++) dots.appendChild(el("span", "wiz-dot"));
+  $set("set-wiz-back").addEventListener("click", () =>
+    gotoWizStep(wizStep - 1),
+  );
+  $set("set-wiz-next").addEventListener("click", () => {
+    if (wizStep === 0 && !intake.presetKey) {
+      $set("set-status").textContent = "Pick an occasion first.";
+      return;
+    }
+    $set("set-status").textContent = "";
+    gotoWizStep(wizStep + 1);
+  });
+  gotoWizStep(0);
+}
+
 function showStage(which) {
   $set("set-stage-a").classList.toggle("hidden", which !== "a");
   $set("set-stage-b").classList.toggle("hidden", which !== "b");
   $set("set-stage-c").classList.toggle("hidden", which !== "c");
+  if (which === "a") gotoWizStep(0); // reopened intake always starts at step 1
 }
 
 // Editable title bar shown on stages B/C — sets are always auto-persisted, so

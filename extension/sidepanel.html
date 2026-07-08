@@ -185,61 +185,90 @@
           <div id="set-mysets-list"></div>
         </details>
 
-        <label class="field-label" for="set-vibe-text">✨ Set vibe <span class="hint">(optional — describe the whole set, or load a saved vibe. Or just pick a preset below.)</span></label>
-        <div id="set-vibe-saved" class="chips"></div>
-        <textarea id="set-vibe-text" rows="2" placeholder="e.g. sunset rooftop, warm and hypnotic…"></textarea>
+        <!-- Guided intake: one question per screen (see set-tab.js wizard controller). -->
+        <div class="wiz" id="set-wiz">
+          <div class="wiz-dots" id="set-wiz-dots" aria-hidden="true"></div>
 
-        <p class="section-head step-head"><span class="step-num">1</span><span class="step-label">Pick an occasion <span class="hint">(preset)</span></span></p>
-        <div id="set-occasions"><!-- cards injected --></div>
+          <!-- Step 1 — Occasion (required) -->
+          <section class="wiz-step" data-step="0">
+            <p class="wiz-q">What's the occasion?</p>
+            <p class="wiz-hint">Pick one — it sets the whole energy arc.</p>
+            <div id="set-occasions"><!-- cards injected --></div>
+          </section>
 
-        <p class="section-head step-head"><span class="step-num">2</span><span class="step-label">How long?</span></p>
-        <div class="length-dials">
-          <div class="dial-group">
-            <span class="dial-group-label">Total runtime</span>
-            <div class="dial" id="set-runtime" role="group" aria-label="Runtime">
-              <button type="button" class="dial-btn" data-min="30">30 min</button>
-              <button type="button" class="dial-btn active" data-min="60">1 hour</button>
-              <button type="button" class="dial-btn" data-min="120">2 hours</button>
-              <button type="button" class="dial-btn" data-min="custom">Custom</button>
-              <input type="number" id="set-runtime-custom" class="hidden" min="5" max="600" placeholder="minutes" />
+          <!-- Step 2 — Length -->
+          <section class="wiz-step" data-step="1" hidden>
+            <p class="wiz-q">How long?</p>
+            <p class="wiz-hint">We'll work out the track count for you.</p>
+            <div class="length-dials">
+              <div class="dial-group">
+                <span class="dial-group-label">Total runtime</span>
+                <div class="dial" id="set-runtime" role="group" aria-label="Runtime">
+                  <button type="button" class="dial-btn" data-min="30">30 min</button>
+                  <button type="button" class="dial-btn active" data-min="60">1 hour</button>
+                  <button type="button" class="dial-btn" data-min="120">2 hours</button>
+                  <button type="button" class="dial-btn" data-min="custom">Custom</button>
+                  <input type="number" id="set-runtime-custom" class="hidden" min="5" max="600" placeholder="minutes" />
+                </div>
+              </div>
+              <div class="dial-group">
+                <span class="dial-group-label">Track style</span>
+                <div class="dial" id="set-tracklen" role="group" aria-label="Track length">
+                  <button type="button" class="dial-btn active" data-len="standard">Standard</button>
+                  <button type="button" class="dial-btn" data-len="extended">Extended</button>
+                  <button type="button" class="dial-btn" data-len="dj-long">DJ-Long</button>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="dial-group">
-            <span class="dial-group-label">Track style</span>
-            <div class="dial" id="set-tracklen" role="group" aria-label="Track length">
-              <button type="button" class="dial-btn active" data-len="standard">Standard</button>
-              <button type="button" class="dial-btn" data-len="extended">Extended</button>
-              <button type="button" class="dial-btn" data-len="dj-long">DJ-Long</button>
-            </div>
+            <p id="set-credit-est" class="credit-est"></p>
+          </section>
+
+          <!-- Step 3 — The sound -->
+          <section class="wiz-step" data-step="2" hidden>
+            <p class="wiz-q">Describe the vibe</p>
+            <p class="wiz-hint">Tap the pink words to change them.</p>
+            <p id="set-madlib" class="madlib"><!-- sentence injected --></p>
+            <div id="set-madlib-chips" class="chips"></div>
+
+            <label class="field-label" for="set-feelings-text">💭 Feelings / mood <span class="hint">(how it should feel — colors the sound, not the words)</span></label>
+            <div id="set-feelings-chips" class="chips"></div>
+            <input type="text" id="set-feelings-text" placeholder="e.g. dreamy, hypnotic, warm…" autocomplete="off" />
+
+            <details id="set-vibe-more">
+              <summary>＋ Add your own words <span class="hint">(optional)</span></summary>
+              <div id="set-vibe-saved" class="chips"></div>
+              <textarea id="set-vibe-text" rows="2" placeholder="e.g. sunset rooftop, warm and hypnotic…"></textarea>
+            </details>
+          </section>
+
+          <!-- Step 4 — Words (optional) + build -->
+          <section class="wiz-step" data-step="3" hidden>
+            <p class="wiz-q">Want words? <span class="wiz-opt">(optional)</span></p>
+            <p class="wiz-hint">Leave blank for an instrumental set — or give the lyrics a theme.</p>
+            <div id="set-theme-chips" class="chips"></div>
+            <input type="text" id="set-theme-text" placeholder="e.g. water &amp; depth, shipping at 2am…" autocomplete="off" />
+            <p id="set-lyric-warn" class="warn amber hidden"></p>
+
+            <details id="set-finetune">
+              <summary>▸ Fine-tune <span class="hint">(optional)</span></summary>
+              <label class="field-label" for="set-genre-select">Genres <span class="hint">(drive the sound)</span></label>
+              <input type="text" id="set-genre-filter" class="genre-filter" placeholder="Filter genres…" autocomplete="off" />
+              <select id="set-genre-select"></select>
+              <div id="set-genre-chips" class="chips"></div>
+              <label class="field-label" for="set-count-override">Exact track count <span class="hint">(overrides length math)</span></label>
+              <input type="number" id="set-count-override" min="3" max="60" placeholder="auto" />
+              <div id="set-subchoices"></div>
+            </details>
+
+            <button class="btn primary block" id="set-plan">🎧 Build my set</button>
+          </section>
+
+          <div class="wiz-nav">
+            <button class="btn ghost" id="set-wiz-back" type="button">← Back</button>
+            <span class="wiz-count" id="set-wiz-count"></span>
+            <button class="btn primary" id="set-wiz-next" type="button">Next →</button>
           </div>
         </div>
-        <p id="set-credit-est" class="credit-est"></p>
-
-        <p class="section-head step-head"><span class="step-num">3</span><span class="step-label">Fill in the blank</span></p>
-        <p id="set-madlib" class="madlib"><!-- sentence injected --></p>
-        <div id="set-madlib-chips" class="chips"></div>
-
-        <label class="field-label" for="set-feelings-text">💭 Feelings / mood <span class="hint">(how it should feel — colors the sound, not the words)</span></label>
-        <div id="set-feelings-chips" class="chips"></div>
-        <input type="text" id="set-feelings-text" placeholder="e.g. dreamy, hypnotic, warm…" autocomplete="off" />
-
-        <label class="field-label" for="set-theme-text">✍️ Lyrics theme <span class="hint">(optional — what the words are about)</span></label>
-        <div id="set-theme-chips" class="chips"></div>
-        <input type="text" id="set-theme-text" placeholder="e.g. water &amp; depth, shipping at 2am…" autocomplete="off" />
-        <p id="set-lyric-warn" class="warn amber hidden"></p>
-
-        <details id="set-finetune">
-          <summary>▸ Fine-tune (optional)</summary>
-          <label class="field-label" for="set-genre-select">Genres <span class="hint">(drive the sound)</span></label>
-          <input type="text" id="set-genre-filter" class="genre-filter" placeholder="Filter genres…" autocomplete="off" />
-          <select id="set-genre-select"></select>
-          <div id="set-genre-chips" class="chips"></div>
-          <label class="field-label" for="set-count-override">Exact track count <span class="hint">(overrides length math)</span></label>
-          <input type="number" id="set-count-override" min="3" max="60" placeholder="auto" />
-          <div id="set-subchoices"></div>
-        </details>
-
-        <button class="btn primary" id="set-plan">Build my set</button>
       </div>
       <div id="set-stage-b" class="hidden"></div>
       <div id="set-stage-c" class="hidden"></div>
