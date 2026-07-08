@@ -127,6 +127,13 @@
         <summary>📎 Saved vibes</summary>
         <div id="vibe-saved-list"></div>
       </details>
+      <details id="gen-history" class="tab-help">
+        <summary>🕘 Recent generations</summary>
+        <div id="gen-history-list"></div>
+        <div class="btn-row">
+          <button class="btn" id="gen-history-clear">Clear all</button>
+        </div>
+      </details>
       <div class="field">
         <label for="gen-input">Describe your vibe or artist reference</label>
         <textarea id="gen-input" rows="3" placeholder="e.g. late night drive, melancholy…"></textarea>
@@ -135,6 +142,13 @@
       <div class="field">
         <label for="gen-subject">What's it about? <span class="hint">(optional — writes real lyrics)</span></label>
         <textarea id="gen-subject" rows="2" placeholder="e.g. driving home after a breakup…"></textarea>
+      </div>
+      <div class="field">
+        <label for="gen-instrumental">
+          <input type="checkbox" id="gen-instrumental" />
+          Instrumental (no vocals)
+          <span class="hint">(writes structure only — no lyrics, no vocal gender)</span>
+        </label>
       </div>
       <div class="mode-toggle" role="group" aria-label="Generation mode">
         <button class="mode-btn active" data-mode="vibe" id="mode-vibe">Vibe</button>

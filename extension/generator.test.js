@@ -4,6 +4,7 @@ import {
   offlineGenerate,
   offlineTitle,
   generatePrompt,
+  normalize,
   SYSTEM_PROMPT,
 } from "./generator.js";
 
@@ -51,6 +52,63 @@ describe("buildUserMessage", () => {
     const msg = buildUserMessage("artist", "some band", "heartbreak");
     expect(msg).toContain("never name them");
     expect(msg).toContain('ABOUT: "heartbreak"');
+  });
+});
+
+describe("buildUserMessage instrumental mode", () => {
+  it("adds the instrumental instruction and asks for empty lyrics when instrumental=true", () => {
+    const msg = buildUserMessage("vibe", "late night drive", "", true);
+    expect(msg).toMatch(/INSTRUMENTAL/);
+    expect(msg).toMatch(/"lyrics" as an empty string/);
+    expect(msg).toMatch(/"vocalGender" as an empty string/);
+  });
+
+  it("omits the instrumental instruction when instrumental=false (default)", () => {
+    const msg = buildUserMessage("vibe", "late night drive");
+    expect(msg).not.toMatch(/INSTRUMENTAL/);
+  });
+});
+
+describe("normalize instrumental enforcement", () => {
+  it("forces empty lyrics and vocalGender when instrumental=true, even if the model returned them", () => {
+    const result = normalize(
+      {
+        title: "Drift",
+        style: "ambient, 70 bpm",
+        lyrics: "some words the model wrote anyway",
+        vocalGender: "female",
+      },
+      true,
+    );
+    expect(result.lyrics).toBe("");
+    expect(result.vocalGender).toBe("");
+    expect(result.title).toBe("Drift");
+    expect(result.style).toBe("ambient, 70 bpm");
+  });
+
+  it("keeps lyrics and vocalGender when instrumental=false", () => {
+    const result = normalize({
+      title: "Drift",
+      lyrics: "real lyrics",
+      vocalGender: "female",
+    });
+    expect(result.lyrics).toBe("real lyrics");
+    expect(result.vocalGender).toBe("female");
+  });
+});
+
+describe("offlineGenerate instrumental mode", () => {
+  it("forces empty lyrics + empty vocalGender and returns a bar-count structure", () => {
+    const r = offlineGenerate("vibe", "late night drive", "", true);
+    expect(r.lyrics).toBe("");
+    expect(r.vocalGender).toBe("");
+    expect(r.structure).toMatch(/bars/i);
+    expect(r.structure).toMatch(/no vocals/i);
+  });
+
+  it("still forces empty vocalGender even if the matched seed names a gender", () => {
+    const r = offlineGenerate("vibe", "zzqq-nomatch", "", true);
+    expect(r.vocalGender).toBe("");
   });
 });
 

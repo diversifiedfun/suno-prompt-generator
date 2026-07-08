@@ -36,6 +36,12 @@ import {
   getAllVibes,
   deleteVibe,
 } from "./storage.js";
+import {
+  addGeneration,
+  getAllGenerations,
+  deleteGeneration,
+  clearGenerations,
+} from "./gen-history.js";
 
 import {
   el,
@@ -49,6 +55,7 @@ import { renderSetTab } from "./set-tab.js";
 import { renderAlbumTab } from "./album-tab.js";
 import { attachAutocomplete } from "./autocomplete.js";
 import { ARTISTS, VIBE_WORDS } from "./suggest-data.js";
+import { relativeAge } from "./set-generator.js";
 
 // ---------------------------------------------------------------------------
 // Tab routing
@@ -723,6 +730,15 @@ document.getElementById("gen-subject").addEventListener("input", (e) => {
   persistUi();
 });
 
+// Persist the instrumental checkbox the same way.
+document.getElementById("gen-instrumental").addEventListener("change", (e) => {
+  uiState = {
+    ...uiState,
+    gen: { ...uiState.gen, instrumental: e.target.checked },
+  };
+  persistUi();
+});
+
 document.getElementById("gen-submit").addEventListener("click", handleGenerate);
 
 async function handleGenerate() {
@@ -732,6 +748,7 @@ async function handleGenerate() {
     return;
   }
   const subject = document.getElementById("gen-subject").value.trim();
+  const instrumental = document.getElementById("gen-instrumental").checked;
 
   const loading = document.getElementById("gen-loading");
   const results = document.getElementById("gen-results");
@@ -754,6 +771,7 @@ async function handleGenerate() {
       subject,
       apiKey: settings.apiKey,
       model: settings.model,
+      instrumental,
     });
   } catch (err) {
     loading.classList.add("hidden");
@@ -775,9 +793,31 @@ async function handleGenerate() {
   // Persist the last result so reopening the panel restores it (not just the input).
   uiState = {
     ...uiState,
-    gen: { ...uiState.gen, input, subject, mode: genMode, result },
+    gen: {
+      ...uiState.gen,
+      input,
+      subject,
+      instrumental,
+      mode: genMode,
+      result,
+    },
   };
   persistUi();
+
+  // Log to generation history. Never let a history-write failure break the
+  // generate flow the user is actively watching.
+  try {
+    await addGeneration({
+      mode: genMode,
+      input,
+      subject,
+      instrumental,
+      result,
+    });
+    renderGenHistory();
+  } catch (err) {
+    console.error("[Suno] Log generation failed:", err.message);
+  }
 }
 
 function renderGenerateResults(container, result) {
@@ -1105,6 +1145,98 @@ document.getElementById("gen-save-vibe").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Generation history — a log of every completed Generate-tab run (input +
+// full output). Lets the user browse past generations and re-paste or reload
+// any of them. Written from handleGenerate(); rendered here.
+// ---------------------------------------------------------------------------
+
+async function renderGenHistory() {
+  const list = document.getElementById("gen-history-list");
+  const summary = document.querySelector("#gen-history summary");
+  let entries = [];
+  try {
+    entries = await getAllGenerations();
+  } catch (err) {
+    console.warn("[Suno] Load generation history failed:", err.message);
+  }
+  if (summary)
+    summary.textContent = `🕘 Recent generations (${entries.length})`;
+  list.textContent = "";
+  if (!entries.length) {
+    list.appendChild(el("p", "hint", "No generations yet — hit “Generate.”"));
+    return;
+  }
+  entries.forEach((entry) => list.appendChild(buildGenHistoryRow(entry)));
+}
+
+function buildGenHistoryRow(entry) {
+  const row = el("div", "myset-row");
+  const info = el("div", "myset-info");
+  const result = entry.result || {};
+  info.appendChild(
+    el("strong", "", result.title || entry.input.slice(0, 40) || "Untitled"),
+  );
+  const styleSnippet = String(result.style || "").slice(0, 60);
+  const meta = [
+    relativeAge(entry.createdAt),
+    styleSnippet,
+    entry.instrumental ? "🎹 instrumental" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  info.appendChild(el("span", "hint", meta));
+  row.appendChild(info);
+
+  const status = el("div", "settings-status");
+
+  const paste = el("button", "btn primary", "Paste → Suno");
+  paste.addEventListener("click", () => pasteVibeIntoSuno(result, status));
+  row.appendChild(paste);
+
+  const load = el("button", "btn", "Load");
+  load.addEventListener("click", () => loadGeneration(entry));
+  row.appendChild(load);
+
+  const del = el("button", "btn", "🗑");
+  del.title = "Delete";
+  del.addEventListener("click", async () => {
+    try {
+      await deleteGeneration(entry.id);
+      renderGenHistory();
+    } catch (err) {
+      console.warn("[Suno] Delete generation failed:", err.message);
+    }
+  });
+  row.appendChild(del);
+  row.appendChild(status);
+  return row;
+}
+
+function loadGeneration(entry) {
+  document.getElementById("gen-input").value = entry.input || "";
+  document.getElementById("gen-subject").value = entry.subject || "";
+  document.getElementById("gen-instrumental").checked = Boolean(
+    entry.instrumental,
+  );
+  setMode(entry.mode);
+  const results = document.getElementById("gen-results");
+  renderGenerateResults(results, entry.result);
+  results.classList.remove("hidden");
+}
+
+document
+  .getElementById("gen-history-clear")
+  .addEventListener("click", async () => {
+    if (!confirm("Clear all recent generations?")) return;
+    try {
+      await clearGenerations();
+      renderGenHistory();
+    } catch (err) {
+      console.warn("[Suno] Clear generation history failed:", err.message);
+    }
+  });
+
+// ---------------------------------------------------------------------------
 // Settings tab
 // ---------------------------------------------------------------------------
 
@@ -1232,6 +1364,8 @@ function restoreGen() {
     document.getElementById("gen-input").value = g.input;
   if (typeof g.subject === "string")
     document.getElementById("gen-subject").value = g.subject;
+  if (typeof g.instrumental === "boolean")
+    document.getElementById("gen-instrumental").checked = g.instrumental;
   if (g.mode === "vibe" || g.mode === "artist") setMode(g.mode);
   if (g.result && typeof g.result === "object") {
     const results = document.getElementById("gen-results");
@@ -1261,6 +1395,7 @@ const VALID_TABS = ["generate", "build", "set", "album", "library", "settings"];
       initSettings(),
       renderLibrary(),
       renderSavedVibes(),
+      renderGenHistory(),
       initFirstRunBanner(),
     ]);
 

@@ -50,19 +50,39 @@ OUTPUT CONTRACT — return ONLY a JSON object, no prose, no markdown fences:
   "variants": ["one alternate style prompt taking a different angle"]
 }`;
 
-export function buildUserMessage(mode, input, subject = "") {
+// Appended when the user wants a wordless instrumental/interlude — overrides
+// the lyrics/vocal rules for this one call without touching SYSTEM_PROMPT.
+const INSTRUMENTAL_INSTRUCTION =
+  ' This is an INSTRUMENTAL track — NO vocals. Return "lyrics" as an empty' +
+  ' string and "vocalGender" as an empty string. Do NOT write any sung words' +
+  ' anywhere. Make "structure" an instrumental scaffold appropriate to the' +
+  " concept: bar-count sections like [Intro - 8 bars: ...], [Main - 24 bars:" +
+  " ...], [Outro - 8 bars: ... fade], with instrumentation/texture cues in" +
+  " parentheses. Where the concept calls for a non-sung sound (a breath, a" +
+  " swell), put it as a SHORT own-line parenthetical under a plain section" +
+  " tag. Judge the length from the concept — a short interlude or a full" +
+  " instrumental. The STYLE field must still lead with genre + BPM but" +
+  " describe instrumentation, not a vocal spec.";
+
+export function buildUserMessage(
+  mode,
+  input,
+  subject = "",
+  instrumental = false,
+) {
   const clean = String(input || "").trim();
   const subj = String(subject || "").trim();
   const subjectLine = subj
     ? ` The song is ABOUT: "${subj}" — write full lyrics on this subject in the lyrics field.`
     : "";
+  const instrumentalLine = instrumental ? INSTRUMENTAL_INSTRUCTION : "";
   if (mode === "artist") {
-    return `The user wants a song that sounds like: "${clean}".${subjectLine} Decompose this artist/style into safe descriptors (never name them) and produce the Suno prompt JSON.`;
+    return `The user wants a song that sounds like: "${clean}".${subjectLine}${instrumentalLine} Decompose this artist/style into safe descriptors (never name them) and produce the Suno prompt JSON.`;
   }
   if (mode === "refine") {
-    return `Improve this existing Suno style prompt — fix weak spots per your rules, keep its intent: "${clean}".${subjectLine} Produce the Suno prompt JSON.`;
+    return `Improve this existing Suno style prompt — fix weak spots per your rules, keep its intent: "${clean}".${subjectLine}${instrumentalLine} Produce the Suno prompt JSON.`;
   }
-  return `The user described this vibe/feeling: "${clean}".${subjectLine} Produce the Suno prompt JSON.`;
+  return `The user described this vibe/feeling: "${clean}".${subjectLine}${instrumentalLine} Produce the Suno prompt JSON.`;
 }
 
 // Tolerant JSON extraction — strips fences/prose, grabs the outermost object.
@@ -85,7 +105,9 @@ function clampPct(v) {
 
 const VOCAL_GENDERS = new Set(["female", "male", "duet", "any"]);
 
-function normalize(obj) {
+// Exported (not just internal) so instrumental enforcement is directly
+// testable — the model can't be trusted to comply with rule 4 unprompted.
+export function normalize(obj, instrumental = false) {
   const gender = String(obj.vocalGender || "")
     .trim()
     .toLowerCase();
@@ -94,11 +116,11 @@ function normalize(obj) {
     style: String(obj.style || "").trim(),
     exclude: String(obj.exclude || "").trim(),
     bpm: String(obj.bpm || "").trim(),
-    vocalGender: VOCAL_GENDERS.has(gender) ? gender : "",
+    vocalGender: instrumental ? "" : VOCAL_GENDERS.has(gender) ? gender : "",
     weirdness: clampPct(obj.weirdness),
     styleInfluence: clampPct(obj.styleInfluence),
     structure: String(obj.structure || "").trim(),
-    lyrics: String(obj.lyrics || "").trim(),
+    lyrics: instrumental ? "" : String(obj.lyrics || "").trim(),
     notes: String(obj.notes || "").trim(),
     variants: Array.isArray(obj.variants)
       ? obj.variants.map((v) => String(v).trim()).filter(Boolean)
@@ -153,23 +175,27 @@ export async function generatePrompt({
   subject = "",
   apiKey,
   model = DEFAULT_MODEL,
+  instrumental = false,
 }) {
   if (!String(input || "").trim())
     throw new Error("Describe a vibe or an artist first.");
   if (!apiKey)
     return {
-      ...offlineGenerate(mode, input, subject),
+      ...offlineGenerate(mode, input, subject, instrumental),
       notes:
         "No API key set — used the offline library. Add your Anthropic key in Settings for full AI generation.",
     };
 
-  const userMessage = buildUserMessage(mode, input, subject);
+  const userMessage = buildUserMessage(mode, input, subject, instrumental);
   try {
-    return normalize(extractJson(await callClaude(apiKey, model, userMessage)));
+    return normalize(
+      extractJson(await callClaude(apiKey, model, userMessage)),
+      instrumental,
+    );
   } catch (firstErr) {
     if (/API key|Rate limited|API error/.test(firstErr.message)) {
       // Real API/network problem — surface it rather than silently masking.
-      const fb = offlineGenerate(mode, input, subject);
+      const fb = offlineGenerate(mode, input, subject, instrumental);
       return {
         ...fb,
         notes: `${firstErr.message} Showing an offline suggestion instead.`,
@@ -179,9 +205,10 @@ export async function generatePrompt({
     try {
       return normalize(
         extractJson(await callClaude(apiKey, model, userMessage, true)),
+        instrumental,
       );
     } catch {
-      const fb = offlineGenerate(mode, input, subject);
+      const fb = offlineGenerate(mode, input, subject, instrumental);
       return {
         ...fb,
         notes:
@@ -194,7 +221,18 @@ export async function generatePrompt({
 // Offline fallback using the curated seed maps. Never throws. Offline can't write
 // real lyrics, so `lyrics` stays empty even when a subject is given; the title is
 // a light derivation from the subject or vibe so the field is never blank.
-export function offlineGenerate(mode, input, subject = "") {
+const INSTRUMENTAL_STRUCTURE =
+  "[Intro - 4 bars] (no vocals, set the mood)\n" +
+  "[Main - 16 bars] (full instrumental arrangement, no vocals)\n" +
+  "[Break - 8 bars] (strip back, texture)\n" +
+  "[Outro - 4 bars] (fade, no vocals)";
+
+export function offlineGenerate(
+  mode,
+  input,
+  subject = "",
+  instrumental = false,
+) {
   const q = String(input || "").toLowerCase();
   const table = mode === "artist" ? ARTIST_TRANSLATIONS : VIBE_SEEDS;
   const hit = table.find((row) => row.match.some((m) => q.includes(m)));
@@ -202,13 +240,16 @@ export function offlineGenerate(mode, input, subject = "") {
   const trapKey = Object.keys(GENRE_TRAPS).find((g) =>
     style.toLowerCase().includes(g.toLowerCase()),
   );
-  // Derive gender from the seed style text when it says so, else leave it open.
+  // Derive gender from the seed style text when it says so, else leave it open
+  // — but an instrumental track never carries a vocal gender.
   const lowerStyle = style.toLowerCase();
-  const vocalGender = /\bfemale\b/.test(lowerStyle)
-    ? "female"
-    : /\bmale\b/.test(lowerStyle)
-      ? "male"
-      : "";
+  const vocalGender = instrumental
+    ? ""
+    : /\bfemale\b/.test(lowerStyle)
+      ? "female"
+      : /\bmale\b/.test(lowerStyle)
+        ? "male"
+        : "";
   return {
     title: offlineTitle(subject, input),
     style,
@@ -217,8 +258,9 @@ export function offlineGenerate(mode, input, subject = "") {
     vocalGender,
     weirdness: "20",
     styleInfluence: "60",
-    structure:
-      "[Intro] (set the mood, 4 bars)\n[Verse] (intimate, minimal)\n[Pre-Chorus] (build tension)\n[Chorus] (full energy, the hook)\n[Verse]\n[Chorus]\n[Bridge] (left turn, strip back)\n[Outro] (resolve / fade)",
+    structure: instrumental
+      ? INSTRUMENTAL_STRUCTURE
+      : "[Intro] (set the mood, 4 bars)\n[Verse] (intimate, minimal)\n[Pre-Chorus] (build tension)\n[Chorus] (full energy, the hook)\n[Verse]\n[Chorus]\n[Bridge] (left turn, strip back)\n[Outro] (resolve / fade)",
     lyrics: "",
     notes: hit
       ? "Starting point from the offline library — generate 3–5 variations on Suno and iterate."
