@@ -60,6 +60,7 @@ import {
 import { driveSunoSliders, sliderPasteMessage } from "./suno-slider-driver.js";
 import { renderSetTab } from "./set-tab.js";
 import { renderAlbumTab } from "./album-tab.js";
+import { renderWavTab } from "./wav-download.js";
 import { attachAutocomplete } from "./autocomplete.js";
 import { ARTISTS, VIBE_WORDS } from "./suggest-data.js";
 import { relativeAge } from "./set-generator.js";
@@ -86,6 +87,7 @@ function activateTab(target, persist = true) {
   if (target === "library") renderLibrary();
   if (target === "set") renderSetTab();
   if (target === "album") renderAlbumTab();
+  if (target === "wav") renderWavTab();
   if (persist) {
     uiState = { ...uiState, activeTab: target };
     persistUi();
@@ -1600,7 +1602,15 @@ function restoreGen() {
   }
 }
 
-const VALID_TABS = ["generate", "build", "set", "album", "library", "settings"];
+const VALID_TABS = [
+  "generate",
+  "build",
+  "set",
+  "album",
+  "wav",
+  "library",
+  "settings",
+];
 
 (async function boot() {
   try {

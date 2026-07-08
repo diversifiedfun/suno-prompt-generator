@@ -1112,6 +1112,17 @@ textarea {
   color: var(--amber-ink);
 }
 
+/* ---- WAV tab per-track progress list (rows reuse .myset-row/.myset-info) ---- */
+#wav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.wav-track-status { margin: 0; }
+.wav-track-ok { color: var(--green); }
+.wav-track-fail { color: var(--red); }
+
 /* ---- First-run onboarding banner ---- */
 .first-run {
   display: flex;

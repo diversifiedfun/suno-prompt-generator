@@ -29,6 +29,9 @@
     <button class="tab-btn" data-tab="album" role="tab" aria-selected="false" aria-controls="tab-album">
       <span class="tab-emoji" aria-hidden="true">💿</span><span class="tab-label">Album</span>
     </button>
+    <button class="tab-btn" data-tab="wav" role="tab" aria-selected="false" aria-controls="tab-wav">
+      <span class="tab-emoji" aria-hidden="true">⬇</span><span class="tab-label">WAV</span>
+    </button>
     <div class="tab-divider" role="presentation" aria-hidden="true"></div>
     <button class="tab-btn" data-tab="library" role="tab" aria-selected="false" aria-controls="tab-library">
       <span class="tab-emoji" aria-hidden="true">📚</span><span class="tab-label">Library</span>
@@ -340,6 +343,25 @@
       <div id="album-stage-b" class="hidden"></div>
       <div id="album-stage-c" class="hidden"></div>
       <div id="album-status" class="settings-status"></div>
+    </section>
+
+    <!-- WAV tab -->
+    <section id="tab-wav" class="tab-panel hidden" role="tabpanel">
+      <div class="panel-title">
+        <h2>⬇ Download as WAV</h2>
+        <p class="panel-sub">Grab a whole playlist as numbered WAV files.</p>
+      </div>
+      <details class="tab-help">
+        <summary>❔ How this works</summary>
+        <p>Paste a Suno <strong>playlist URL</strong> (or its id). Needs an open, logged-in <strong>suno.com</strong> tab and <strong>Suno Pro</strong> — WAV export is a Pro feature. Tracks download in playlist order into a folder named after the playlist: <code>01 - First Title.wav</code>, <code>02 - Second Title.wav</code>…</p>
+      </details>
+      <div class="field">
+        <label class="field-label" for="wav-url">Playlist URL or id</label>
+        <input type="text" id="wav-url" placeholder="https://suno.com/playlist/2b2f6c3a-1234-4a5b-9c8d-1234567890ab" autocomplete="off" />
+      </div>
+      <button class="btn primary block" id="wav-start">Download playlist</button>
+      <div id="wav-status" class="settings-status"></div>
+      <div id="wav-list"></div>
     </section>
 
     <!-- Settings tab -->
