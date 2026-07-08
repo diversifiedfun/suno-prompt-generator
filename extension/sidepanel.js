@@ -21,7 +21,13 @@ import {
   DESCRIPTOR_MAX,
 } from "./knowledge.js";
 
-import { generatePrompt, MODELS, buildStyleOptions } from "./generator.js";
+import {
+  generatePrompt,
+  MODELS,
+  buildStyleOptions,
+  riffStyle,
+  mergeRiff,
+} from "./generator.js";
 import { DEFAULT_MODEL } from "./constants.js";
 import {
   addPrompt,
@@ -869,7 +875,9 @@ function renderGenerateResults(container, result) {
     );
   }
   if (styleOptions.length) {
-    container.appendChild(buildStylePicker(styleOptions, styleSel));
+    container.appendChild(
+      buildStylePicker(styleOptions, styleSel, result, container),
+    );
   }
   if (result.exclude) {
     container.appendChild(
@@ -912,7 +920,7 @@ function renderGenerateResults(container, result) {
 // the shown text and what Copy / Save operate on. With exactly one option it
 // renders identically to a plain buildResultSection("Style", ...) call — no
 // visual change for results with no variants.
-function buildStylePicker(styleOptions, styleSel) {
+function buildStylePicker(styleOptions, styleSel, result, container) {
   const section = el("div", "result-section");
   section.appendChild(el("div", "result-label", "Style"));
 
@@ -923,6 +931,10 @@ function buildStylePicker(styleOptions, styleSel) {
     section.appendChild(buildStyleToggle(styleOptions, styleSel, textEl));
   }
   section.appendChild(textEl);
+
+  section.appendChild(
+    buildRiffControls(result, styleOptions, styleSel, container),
+  );
 
   const row = el("div", "btn-row");
   const copyBtn = el("button", "btn", "Copy");
@@ -974,6 +986,116 @@ function buildStyleToggle(styleOptions, styleSel, textEl) {
     return btn;
   });
   return toggle;
+}
+
+// "Riff the sound" — quick nudge chips + a free-text tweak. Regenerates ONLY
+// the sound fields (style/variants/exclude/bpm/sliders) via riffStyle(),
+// keeping the words + song identity locked. Never logged to generation
+// history — this is in-place tinkering, not a new generation.
+const RIFF_NUDGES = [
+  "Darker",
+  "Brighter",
+  "Heavier",
+  "Softer",
+  "More cinematic",
+  "Weirder",
+  "Cleaner",
+  "Slower",
+];
+
+function buildRiffControls(result, styleOptions, styleSel, container) {
+  const wrap = el("div", "riff-row");
+  wrap.appendChild(el("div", "result-label riff-label", "Riff the sound"));
+
+  const status = el("div", "settings-status riff-status hidden");
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "riff-input";
+  input.placeholder = "tweak… e.g. more dark, less synth";
+  const riffBtn = el("button", "btn nudge", "Riff");
+
+  const runNudge = (nudge) => {
+    const tweak = String(nudge || "").trim();
+    if (!tweak) return;
+    handleRiff({
+      result,
+      styleOptions,
+      styleSel,
+      container,
+      nudge: tweak,
+      riffBtn,
+      status,
+    });
+  };
+
+  const chipsRow = el("div", "chips riff-chips");
+  RIFF_NUDGES.forEach((nudge) => {
+    const chip = el("button", "chip", nudge);
+    chip.addEventListener("click", () => runNudge(nudge));
+    chipsRow.appendChild(chip);
+  });
+  wrap.appendChild(chipsRow);
+
+  const inputRow = el("div", "riff-input-row");
+  inputRow.appendChild(input);
+  riffBtn.addEventListener("click", () => runNudge(input.value));
+  inputRow.appendChild(riffBtn);
+  wrap.appendChild(inputRow);
+
+  wrap.appendChild(status);
+  return wrap;
+}
+
+// Calls riffStyle() with the currently-selected style, merges the result over
+// the existing generate result (lyrics/title/structure/vocalGender locked),
+// and re-renders the whole results container in place.
+async function handleRiff({
+  result,
+  styleOptions,
+  styleSel,
+  container,
+  nudge,
+  riffBtn,
+  status,
+}) {
+  const currentStyle = styleOptions[styleSel.idx]?.text ?? result.style;
+  const origLabel = riffBtn.textContent;
+  riffBtn.disabled = true;
+  riffBtn.textContent = "Riffing…";
+  status.textContent = "";
+  status.classList.add("hidden");
+
+  let settings;
+  try {
+    settings = await getSettings();
+  } catch {
+    settings = { apiKey: "", model: DEFAULT_MODEL };
+  }
+
+  try {
+    const riff = await riffStyle({
+      currentStyle,
+      nudge,
+      apiKey: settings.apiKey,
+      model: settings.model,
+    });
+    const merged = mergeRiff(result, riff);
+    renderGenerateResults(container, merged);
+    uiState = { ...uiState, gen: { ...uiState.gen, result: merged } };
+    persistUi();
+  } catch (err) {
+    console.error("[Suno] Riff failed:", err.message);
+    riffBtn.disabled = false;
+    riffBtn.textContent = origLabel;
+    const warnEl = el("div", "warn red");
+    warnEl.appendChild(el("span", "ic", "✗"));
+    const msg = el("span");
+    msg.appendChild(txt(err.message));
+    warnEl.appendChild(msg);
+    status.textContent = "";
+    status.appendChild(warnEl);
+    status.classList.remove("hidden");
+  }
 }
 
 // Builds one result card. savable=true shows "Save to library"; variantSave
@@ -1093,15 +1215,28 @@ async function pasteVibeIntoSuno(result, statusEl) {
   let resp;
   try {
     resp = await chrome.tabs.sendMessage(tabId, payload);
-  } catch {
+  } catch (firstErr) {
+    // No live content script in that tab (pre-existing tab, or stale after an
+    // extension reload). Inject it, then retry. Surface the real error on both
+    // steps so a failure is diagnosable instead of a generic dead-end.
+    console.warn(
+      "[Suno] paste: sendMessage failed, re-injecting —",
+      firstErr?.message,
+    );
     try {
       await chrome.scripting.executeScript({
         target: { tabId },
         files: ["suno-fill.js"],
       });
       resp = await chrome.tabs.sendMessage(tabId, payload);
-    } catch {
-      setStatus("Couldn't reach the Suno tab — reload suno.com and retry.");
+    } catch (injectErr) {
+      console.error(
+        "[Suno] paste: re-inject/retry failed —",
+        injectErr?.message,
+      );
+      setStatus(
+        `Couldn't reach the Suno tab — reload suno.com and retry. (${injectErr?.message || "unknown"})`,
+      );
       return;
     }
   }

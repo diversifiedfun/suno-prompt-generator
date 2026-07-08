@@ -34,6 +34,7 @@ NON-NEGOTIABLE RULES (from tested research):
 15. NOTES: "notes" is ONE short, concrete, do-it-now sentence. It must NOT hedge ("if Suno supports it", "keep regenerating until…"), must NOT tell the user to add tags (bake those into the lyrics instead per rule 12), and must NOT restate the style or lyrics. If there is nothing genuinely useful and specific to add, return an empty string.
 16. VOCAL DELIVERY (whispered, belted, falsetto, spoken-word, harmonized, breathy, stripped-back, building-intensity): the STYLE field is the reliable lever — put delivery there, described per section (e.g. "breathy intimate verses building to a belted chorus, stripped whispered bridge"). In the LYRICS, the ONLY reliable per-section cue is a SHORT parenthetical on its OWN line, sitting between the plain section tag and the lyric lines — i.e. [Bridge] on its own line, then (whispered) alone on the next line, then the clean lyric lines. NEVER put a second bracket after a section tag — [Verse] [Soft, Intimate] gets SUNG out loud as lyrics. NEVER glue the cue onto a lyric line, and NEVER put lyric words inside brackets. Keep section tags plain ([Verse] / [Chorus] / [Bridge]); use at most 2–3 cues per song (the bridge is the highest-value spot). A true whisper also needs that section kept sparse in the style — Suno won't whisper over a wall of sound.
 17. LYRIC CRAFT (when writing full lyrics): (a) SYLLABLES — keep lines even; set a per-line syllable count and hold every line within ±2 of it (cramming makes Suno rush, glitch, or "chipmunk"). (b) RHYME — favor ABAB interlocking and SLANT / near rhymes (love/enough/rough) over sing-song AABB perfect rhymes, which trigger nursery-rhyme melodies and read AI-written. (c) CHORUS — short (2–4 lines) and REPEAT the identical chorus text each time so the melody locks in. (d) PRONUNCIATION — Suno sings spelling, it has no dictionary: respell tricky words, NAMES, and numbers the way they SOUND (Evie→Ee-vee, through→thru, 2am→three A-M, read[past tense]→red). (e) keep verses restrained/intimate and the chorus big — the contrast is what makes the hook feel huge.
+18. BPM PAIRING: whenever you anchor a BPM, ALSO pair it with a tempo-feel word and lean on genre-implied tempo + a rhythm descriptor — those move Suno more than the bare number. E.g. "driving four-on-the-floor, 128 BPM", "halftime, 88 BPM", "slow ballad, 62 BPM". The BPM is a target, not a guarantee — the feel word is what actually steers the result.
 
 OUTPUT CONTRACT — return ONLY a JSON object, no prose, no markdown fences:
 {
@@ -85,6 +86,22 @@ export function buildUserMessage(
   return `The user described this vibe/feeling: "${clean}".${subjectLine}${instrumentalLine} Produce the Suno prompt JSON.`;
 }
 
+// Focused user message for "Riff the sound" — revise an EXISTING style prompt
+// toward a nudge ("more dark", "heavier") without touching the song's words
+// or identity. Only the sound fields are consumed from the response.
+export function buildRiffMessage(currentStyle, nudge) {
+  const style = String(currentStyle || "").trim();
+  const tweak = String(nudge || "").trim();
+  return (
+    `Here is an existing Suno STYLE prompt to revise: "${style}". Revise it` +
+    ` to be: "${tweak}". Keep the same genre and song identity; change only` +
+    ` the sound. Follow all your standard style rules (genre-first, 6-12` +
+    ` descriptors, no artist names, BPM anchored + paired with a tempo-feel` +
+    ` word). Return the JSON with a revised "style" + one alternate` +
+    ` "variant"; set "lyrics" to "". Do not invent a new song.`
+  );
+}
+
 // Tolerant JSON extraction — strips fences/prose, grabs the outermost object.
 function extractJson(text) {
   if (!text) throw new Error("empty response");
@@ -109,6 +126,29 @@ export function buildStyleOptions(result) {
     .filter(Boolean)
     .forEach((text, i) => options.push({ label: `Variant ${i + 1}`, text }));
   return options;
+}
+
+// Merges a "Riff the sound" response into an existing generate result.
+// Immutable: returns a NEW object, never mutates either input. The riffed
+// sound fields replace the originals; the words + song identity (title,
+// lyrics, structure, vocalGender) stay locked to the original result — that's
+// the whole point of riffing (sound-only tinkering, lyrics never regenerate).
+export function mergeRiff(result, riff) {
+  return {
+    ...result,
+    style: riff.style,
+    variants: riff.variants,
+    exclude: riff.exclude,
+    bpm: riff.bpm,
+    weirdness: riff.weirdness,
+    styleInfluence: riff.styleInfluence,
+    fallback: riff.fallback,
+    notes: riff.notes,
+    title: result.title,
+    lyrics: result.lyrics,
+    structure: result.structure,
+    vocalGender: result.vocalGender,
+  };
 }
 
 // Clamp a slider recommendation to an integer 0–100; empty string if unusable.
@@ -229,6 +269,64 @@ export async function generatePrompt({
         notes:
           "AI response was unparseable twice — used the offline library instead.",
       };
+    }
+  }
+}
+
+// Builds an offline riff result: the nudge appended directly to the current
+// style, normalized into the same shape a real riff would return, but honestly
+// flagged as a fallback so the UI can show why it looks unrevised.
+function offlineRiff(currentStyle, nudge, notes) {
+  const style = String(currentStyle || "").trim();
+  const tweak = String(nudge || "").trim();
+  return {
+    ...normalize({ style: tweak ? `${style}, ${tweak}` : style, notes }, false),
+    fallback: true,
+  };
+}
+
+// Revises the SOUND of an existing style prompt only — never touches lyrics.
+// Mirrors generatePrompt's structure: offline fallback with no key, retry-once
+// in strict JSON-prefill mode on a parse failure, honest offline fallback on
+// any real API/network error or a second unparseable response.
+export async function riffStyle({
+  currentStyle,
+  nudge,
+  apiKey,
+  model = DEFAULT_MODEL,
+}) {
+  if (!apiKey)
+    return offlineRiff(
+      currentStyle,
+      nudge,
+      "No API key set — appended your nudge directly. Add your Anthropic key in Settings for a full AI revise.",
+    );
+
+  const userMessage = buildRiffMessage(currentStyle, nudge);
+  try {
+    return normalize(
+      extractJson(await callClaude(apiKey, model, userMessage)),
+      false,
+    );
+  } catch (firstErr) {
+    if (/API key|Rate limited|API error/.test(firstErr.message)) {
+      return offlineRiff(
+        currentStyle,
+        nudge,
+        `${firstErr.message} Appended your nudge directly instead.`,
+      );
+    }
+    try {
+      return normalize(
+        extractJson(await callClaude(apiKey, model, userMessage, true)),
+        false,
+      );
+    } catch {
+      return offlineRiff(
+        currentStyle,
+        nudge,
+        "AI response was unparseable twice — appended your nudge directly instead.",
+      );
     }
   }
 }

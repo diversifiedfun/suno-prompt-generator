@@ -7,6 +7,9 @@ import {
   normalize,
   SYSTEM_PROMPT,
   buildStyleOptions,
+  buildRiffMessage,
+  riffStyle,
+  mergeRiff,
 } from "./generator.js";
 
 describe("vocal delivery-mode lyric guidance", () => {
@@ -224,5 +227,99 @@ describe("generatePrompt (offline path)", () => {
     await expect(
       generatePrompt({ mode: "vibe", input: "", apiKey: "" }),
     ).rejects.toThrow(/Describe a vibe/);
+  });
+});
+
+describe("SYSTEM_PROMPT BPM tempo-word pairing", () => {
+  it("instructs pairing the BPM with a tempo/feel word, not just the digits", () => {
+    // Rule-1's "tempo" field label already exists — the new rule must add the
+    // concrete pairing guidance and example phrasing, not just the word "tempo".
+    expect(SYSTEM_PROMPT).toMatch(/four-on-the-floor|halftime/i);
+    expect(SYSTEM_PROMPT).toMatch(
+      /tempo|four-on-the-floor|halftime|feel word/i,
+    );
+  });
+});
+
+describe("buildRiffMessage", () => {
+  it("includes the current style verbatim, the nudge, and asks for empty lyrics", () => {
+    const msg = buildRiffMessage(
+      "indie pop, 100 bpm, breathy vocals",
+      "more dark",
+    );
+    expect(msg).toContain("indie pop, 100 bpm, breathy vocals");
+    expect(msg).toContain("more dark");
+    expect(msg).toMatch(/"lyrics" to ""/);
+    expect(msg).toMatch(/same genre/i);
+    expect(msg).toMatch(/change only the sound/i);
+  });
+});
+
+describe("mergeRiff", () => {
+  it("keeps title/lyrics/structure/vocalGender from result, takes style/variants/bpm/exclude/sliders from riff, immutably", () => {
+    const result = {
+      title: "Neon Mile",
+      style: "indie pop, 100 bpm",
+      exclude: "",
+      bpm: "100",
+      vocalGender: "female",
+      weirdness: "20",
+      styleInfluence: "60",
+      structure: "[Intro]...",
+      lyrics: "real lyrics here, never touch these words",
+      notes: "",
+      variants: [],
+      fallback: false,
+    };
+    const originalResultSnapshot = { ...result };
+    const riff = {
+      title: "",
+      style: "dark indie pop, 92 bpm",
+      exclude: "bright synths, replace with dark pads",
+      bpm: "92",
+      vocalGender: "",
+      weirdness: "35",
+      styleInfluence: "65",
+      structure: "",
+      lyrics: "",
+      notes: "Revised toward a darker sound.",
+      variants: ["moodier dark-pop variant"],
+      fallback: false,
+    };
+
+    const merged = mergeRiff(result, riff);
+
+    // Identity + words are locked from the original result.
+    expect(merged.title).toBe("Neon Mile");
+    expect(merged.lyrics).toBe("real lyrics here, never touch these words");
+    expect(merged.structure).toBe("[Intro]...");
+    expect(merged.vocalGender).toBe("female");
+
+    // Sound fields come from the riff.
+    expect(merged.style).toBe("dark indie pop, 92 bpm");
+    expect(merged.variants).toEqual(["moodier dark-pop variant"]);
+    expect(merged.exclude).toBe("bright synths, replace with dark pads");
+    expect(merged.bpm).toBe("92");
+    expect(merged.weirdness).toBe("35");
+    expect(merged.styleInfluence).toBe("65");
+    expect(merged.notes).toBe("Revised toward a darker sound.");
+
+    // Immutable: original result object untouched, and a new object returned.
+    expect(merged).not.toBe(result);
+    expect(result).toEqual(originalResultSnapshot);
+  });
+});
+
+describe("riffStyle (offline path)", () => {
+  it("appends the nudge to the current style and does not throw when no apiKey is set", async () => {
+    const riff = await riffStyle({
+      currentStyle: "indie pop, 100 bpm, breathy vocals",
+      nudge: "more dark",
+      apiKey: "",
+    });
+    expect(riff.style).toContain("indie pop, 100 bpm, breathy vocals");
+    expect(riff.style).toContain("more dark");
+    expect(riff.fallback).toBe(true);
+    expect(riff.notes).toMatch(/No API key/);
   });
 });

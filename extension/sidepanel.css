@@ -523,6 +523,48 @@ textarea {
   margin-bottom: 10px;
 }
 
+/* ---- Riff the sound (regenerate style only, keep lyrics) ---- */
+.riff-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.riff-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+}
+
+.riff-chips {
+  margin-bottom: 7px;
+}
+
+.riff-chips .chip {
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+.riff-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.riff-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel-2);
+  color: var(--ink);
+}
+
+.riff-input:focus { border-color: var(--cyan); outline: none; }
+
 /* ---- Library cards ---- */
 .prompt-list {
   display: flex;
