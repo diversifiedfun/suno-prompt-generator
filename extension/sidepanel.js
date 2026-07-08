@@ -39,6 +39,7 @@ import {
 import {
   addGeneration,
   getAllGenerations,
+  toggleStar,
   deleteGeneration,
   clearGenerations,
 } from "./gen-history.js";
@@ -1188,6 +1189,21 @@ function buildGenHistoryRow(entry) {
   row.appendChild(info);
 
   const status = el("div", "settings-status");
+
+  // Star toggle — starred entries are exempt from the 500-record cap.
+  const star = el("button", "btn", entry.starred ? "★" : "☆");
+  star.title = entry.starred
+    ? "Starred (kept forever) — click to unstar"
+    : "Star to keep past the 500 cap";
+  star.addEventListener("click", async () => {
+    try {
+      await toggleStar(entry.id);
+      renderGenHistory();
+    } catch (err) {
+      console.warn("[Suno] Star generation failed:", err.message);
+    }
+  });
+  row.appendChild(star);
 
   const paste = el("button", "btn primary", "Paste → Suno");
   paste.addEventListener("click", () => pasteVibeIntoSuno(result, status));

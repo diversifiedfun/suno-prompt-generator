@@ -57,7 +57,7 @@ function storageGetAll() {
 
 // --- Generation history CRUD -------------------------------------------------
 
-const MAX_RECORDS = 50;
+const MAX_RECORDS = 500;
 
 // Strictly-increasing timestamp so two generations logged in the same
 // millisecond still sort deterministically newest-first (mirrors storage.js's
@@ -84,6 +84,7 @@ export async function addGeneration({
     input: String(input || "").trim(),
     subject: String(subject || "").trim(),
     instrumental: Boolean(instrumental),
+    starred: false,
     result: result && typeof result === "object" ? result : {},
   };
   await storageSet({ [`genhist_${id}`]: record });
@@ -91,12 +92,26 @@ export async function addGeneration({
   return record;
 }
 
-// Keep only the MAX_RECORDS newest entries — drop anything older.
+// Star/unstar a record. Starred records are exempt from the cap — they're
+// never auto-evicted. Immutable: writes a new record, never mutates in place.
+export async function toggleStar(id) {
+  const key = `genhist_${id}`;
+  const stored = await storageGet([key]);
+  if (!stored[key]) throw new Error(`Generation ${id} not found`);
+  const updated = { ...stored[key], starred: !stored[key].starred };
+  await storageSet({ [key]: updated });
+  return updated;
+}
+
+// Cap applies to UNSTARRED records only: keep every starred entry plus the
+// MAX_RECORDS newest unstarred, drop older unstarred beyond that.
 async function enforceCap() {
-  const all = await getAllGenerations();
-  if (all.length <= MAX_RECORDS) return;
-  const overflowKeys = all.slice(MAX_RECORDS).map((r) => `genhist_${r.id}`);
-  await storageRemove(overflowKeys);
+  const all = await getAllGenerations(); // newest first
+  const overflowKeys = all
+    .filter((r) => !r.starred)
+    .slice(MAX_RECORDS)
+    .map((r) => `genhist_${r.id}`);
+  if (overflowKeys.length) await storageRemove(overflowKeys);
 }
 
 export async function getAllGenerations() {
