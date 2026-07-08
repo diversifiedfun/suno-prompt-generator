@@ -8,6 +8,12 @@ import {
   getOccasion,
   occasionSentence,
   blanksToPlanParams,
+  ENERGY,
+  TEXTURE,
+  ARRANGEMENT,
+  PERCUSSION,
+  PEAK,
+  VOCAL,
 } from "./set-knowledge.js";
 
 describe("set-knowledge presets", () => {
@@ -77,15 +83,80 @@ describe("occasions", () => {
   });
 });
 
-describe("occasionSentence", () => {
-  it("vocal occasionSentence is now sound-only (no about blank)", () => {
-    const slots = occasionSentence(getPreset("day-floor-peak"))
-      .parts.filter((p) => typeof p === "object")
-      .map((p) => p.slot);
-    expect(slots).toContain("vibe1");
-    expect(slots).not.toContain("about");
+describe("new mad-lib word pools", () => {
+  it("exports curated ENERGY/TEXTURE/ARRANGEMENT/PERCUSSION/PEAK/VOCAL pools", () => {
+    for (const pool of [
+      ENERGY,
+      TEXTURE,
+      ARRANGEMENT,
+      PERCUSSION,
+      PEAK,
+      VOCAL,
+    ]) {
+      expect(Array.isArray(pool)).toBe(true);
+      expect(pool.length).toBeGreaterThanOrEqual(6);
+      for (const word of pool) expect(typeof word).toBe("string");
+    }
   });
-  it("instrumental preset has NO 'about' blank", () => {
+});
+
+describe("occasionSentence — richer templates with dropdowns", () => {
+  it("instrumental preset returns select-control blanks with the expected slots + pools", () => {
+    const s = occasionSentence(getPreset("deep-focus-house"));
+    expect(s.category).toBe("instrumental");
+    const blanks = s.parts.filter((p) => typeof p === "object");
+    const bySlot = Object.fromEntries(blanks.map((b) => [b.slot, b]));
+    expect(Object.keys(bySlot).sort()).toEqual(
+      [
+        "arrangement",
+        "energy",
+        "peak",
+        "percussion",
+        "texture",
+        "texture2",
+      ].sort(),
+    );
+    expect(bySlot.energy.pool).toBe("ENERGY");
+    expect(bySlot.texture.pool).toBe("TEXTURE");
+    expect(bySlot.texture2.pool).toBe("TEXTURE");
+    expect(bySlot.arrangement.pool).toBe("ARRANGEMENT");
+    expect(bySlot.percussion.pool).toBe("PERCUSSION");
+    expect(bySlot.peak.pool).toBe("PEAK");
+    for (const b of blanks) {
+      expect(b.control).toBe("select");
+      expect(b.default).toBeTruthy();
+    }
+  });
+
+  it("vocal preset (chant/full-lead) returns select-control blanks with the expected slots + pools", () => {
+    const s = occasionSentence(getPreset("day-floor-peak"));
+    expect(s.category).toBe("vocal");
+    const blanks = s.parts.filter((p) => typeof p === "object");
+    const bySlot = Object.fromEntries(blanks.map((b) => [b.slot, b]));
+    expect(Object.keys(bySlot).sort()).toEqual(
+      ["energy", "mood", "peak", "percussion", "vocal"].sort(),
+    );
+    expect(bySlot.energy.pool).toBe("ENERGY");
+    expect(bySlot.vocal.pool).toBe("VOCAL");
+    expect(bySlot.mood.pool).toBe("MOOD");
+    expect(bySlot.percussion.pool).toBe("PERCUSSION");
+    expect(bySlot.peak.pool).toBe("PEAK");
+    for (const b of blanks) {
+      expect(b.control).toBe("select");
+      expect(b.default).toBeTruthy();
+    }
+  });
+
+  it("seeds defaults from preset.doWords when a doWord matches the pool (deep-focus-house → hypnotic/submerged)", () => {
+    const s = occasionSentence(getPreset("deep-focus-house"));
+    const bySlot = Object.fromEntries(
+      s.parts.filter((p) => typeof p === "object").map((b) => [b.slot, b]),
+    );
+    expect(bySlot.energy.default).toBe("hypnotic");
+    expect(bySlot.texture.default).toBe("submerged");
+  });
+
+  it("instrumental preset has no 'about' blank", () => {
     const s = occasionSentence(getPreset("deep-focus"));
     expect(s.category).toBe("instrumental");
     const slots = s.parts
@@ -93,6 +164,7 @@ describe("occasionSentence", () => {
       .map((p) => p.slot);
     expect(slots).not.toContain("about");
   });
+
   it("no blank is left without a default", () => {
     for (const p of PRESETS)
       for (const part of occasionSentence(p).parts)
@@ -100,33 +172,36 @@ describe("occasionSentence", () => {
   });
 });
 
-describe("blanksToPlanParams", () => {
-  it("maps vocal blanks: vibes→sound, no theme", () => {
-    const r = blanksToPlanParams(getPreset("day-floor-peak"), {
-      vibe1: "funky",
-      vibe2: "filthy",
+describe("blanksToPlanParams — new slots", () => {
+  it("maps instrumental blanks: texture/texture2/arrangement/percussion→scene, energy→vibe", () => {
+    const r = blanksToPlanParams(getPreset("deep-focus-house"), {
+      energy: "hypnotic",
+      texture: "submerged",
+      texture2: "glassy",
+      arrangement: "synth-led",
+      percussion: "dub bass",
+      peak: "a slow dissolve",
     });
-    expect(r.vibe).toEqual(["funky", "filthy"]);
-    expect(r.theme).toBeUndefined();
-    expect(r.scene).toBe("");
-  });
-  it("maps instrumental blanks: texture→scene, mood→vibe, no theme", () => {
-    const r = blanksToPlanParams(getPreset("deep-focus"), {
-      texture: "warm rhodes",
-      mood: "steady",
-    });
-    expect(r.scene).toBe("warm rhodes");
-    expect(r.vibe).toEqual(["steady"]);
+    expect(r.scene).toContain("submerged");
+    expect(r.scene).toContain("glassy");
+    expect(r.scene).toContain("synth-led");
+    expect(r.scene).toContain("dub bass");
+    expect(r.vibe).toEqual(["hypnotic"]);
     expect(r.theme).toBe("");
   });
-  it("blanksToPlanParams no longer emits theme", () => {
+
+  it("maps vocal blanks: energy+mood→vibe, vocal+percussion→scene, no theme", () => {
     const r = blanksToPlanParams(getPreset("day-floor-peak"), {
-      vibe1: "funky",
-      vibe2: "filthy",
+      energy: "driving",
+      vocal: "soaring",
+      mood: "Euphoric",
+      percussion: "four-on-the-floor",
+      peak: "a euphoric peak",
     });
-    expect(r.vibe).toEqual(["funky", "filthy"]);
+    expect(r.vibe).toEqual(["driving", "Euphoric"]);
+    expect(r.scene).toContain("soaring");
+    expect(r.scene).toContain("four-on-the-floor");
     expect(r.theme).toBeUndefined();
-    expect(r.scene).toBe("");
   });
 });
 

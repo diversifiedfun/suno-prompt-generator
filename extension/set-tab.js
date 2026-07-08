@@ -7,6 +7,12 @@ import {
   getPreset,
   VIBES,
   THEMES,
+  ENERGY,
+  TEXTURE,
+  ARRANGEMENT,
+  PERCUSSION,
+  PEAK,
+  VOCAL,
   OCCASIONS,
   getOccasion,
   occasionSentence,
@@ -58,7 +64,17 @@ const intake = {
   feelings: "",
 };
 
-const POOLS = { vibe: VIBES, theme: THEMES };
+const POOLS = {
+  vibe: VIBES,
+  theme: THEMES,
+  ENERGY,
+  TEXTURE,
+  ARRANGEMENT,
+  PERCUSSION,
+  PEAK,
+  VOCAL,
+  MOOD: VIBES,
+};
 
 // Chosen set genres shown as removable chips.
 function renderSetGenreChips() {
@@ -201,10 +217,11 @@ function wireLengthDials() {
   });
 }
 
-// Render the mad-libs sentence for the chosen occasion; each blank is a pre-filled
-// editable field. Focusing a blank shows its pool as pickable suggestion chips
-// (blank boxes kill creative-tool UX — offer options). Blank values live in
-// intake.blanks (seeded from the template so nothing is ever empty).
+// Render the mad-libs sentence for the chosen occasion; each blank is a
+// <select> dropdown pre-filled from the template's default so nothing is ever
+// empty. Blank values live in intake.blanks (seeded from the template — a
+// saved draft with old slot names just re-seeds since those slots are absent
+// from the current template's parts).
 function renderMadlib() {
   const box = $set("set-madlib");
   const chipBox = $set("set-madlib-chips");
@@ -222,37 +239,24 @@ function renderMadlib() {
     }
     if (intake.blanks[part.slot] == null)
       intake.blanks[part.slot] = part.default;
-    const input = document.createElement("input");
-    input.className = "blank";
-    input.value = intake.blanks[part.slot];
-    input.size = Math.max(6, String(intake.blanks[part.slot]).length);
-    input.dataset.slot = part.slot;
-    input.dataset.pool = part.pool;
-    input.addEventListener("input", () => {
-      intake.blanks[part.slot] = input.value;
-      input.size = Math.max(6, input.value.length);
+    const select = document.createElement("select");
+    select.className = "blank-select";
+    select.dataset.slot = part.slot;
+    select.dataset.pool = part.pool;
+    const options = POOLS[part.pool] || [];
+    for (const word of options) select.appendChild(new Option(word, word));
+    // Stale value from an old draft that isn't in this pool — keep it
+    // selectable rather than silently snapping to the first option.
+    if (!options.includes(intake.blanks[part.slot]))
+      select.appendChild(
+        new Option(intake.blanks[part.slot], intake.blanks[part.slot]),
+      );
+    select.value = intake.blanks[part.slot];
+    select.addEventListener("change", () => {
+      intake.blanks[part.slot] = select.value;
       persistDraft();
     });
-    input.addEventListener("focus", () => renderMadlibChips(part.pool, input));
-    box.appendChild(input);
-  }
-}
-
-// Suggestion chips for the focused blank; tapping one fills that blank.
-function renderMadlibChips(pool, input) {
-  const chipBox = $set("set-madlib-chips");
-  chipBox.textContent = "";
-  for (const word of POOLS[pool] || []) {
-    const chip = el("button", "chip", word);
-    chip.type = "button";
-    chip.addEventListener("mousedown", (e) => {
-      e.preventDefault(); // keep focus off the button so the input stays targeted
-      input.value = word;
-      input.size = Math.max(6, word.length);
-      intake.blanks[input.dataset.slot] = word;
-      persistDraft();
-    });
-    chipBox.appendChild(chip);
+    box.appendChild(select);
   }
 }
 

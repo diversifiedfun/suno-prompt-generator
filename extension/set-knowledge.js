@@ -507,6 +507,75 @@ export const THEMES = [
   "Water / Depth / Submersion",
 ];
 
+// Mad-libs dropdown pools (Task: richer sentence templates). Each backs a
+// <select> in the Set tab intake — kept curated + tasteful, not exhaustive.
+export const ENERGY = [
+  "hypnotic",
+  "driving",
+  "euphoric",
+  "relentless",
+  "dreamy",
+  "dark",
+  "sultry",
+  "uplifting",
+  "gritty",
+  "warm",
+];
+
+export const TEXTURE = [
+  "submerged",
+  "glassy",
+  "warm",
+  "cavernous",
+  "crystalline",
+  "smoky",
+  "saturated",
+  "airy",
+  "metallic",
+  "organic",
+  "neon",
+  "liquid",
+];
+
+export const ARRANGEMENT = [
+  "instrumental",
+  "mostly instrumental",
+  "synth-led",
+  "organic and live",
+  "stripped-back",
+  "wall-of-sound",
+];
+
+export const PERCUSSION = [
+  "rolling breakbeats",
+  "four-on-the-floor",
+  "halftime swing",
+  "no drums",
+  "tribal percussion",
+  "skittering hats",
+  "dub bass",
+];
+
+export const PEAK = [
+  "a euphoric peak",
+  "a filthy drop",
+  "a weightless release",
+  "a relentless climb",
+  "a slow dissolve",
+  "a hands-up moment",
+];
+
+export const VOCAL = [
+  "soaring",
+  "breathy",
+  "gritty",
+  "chanted",
+  "sultry",
+  "anthemic",
+  "whispered",
+  "half-sung",
+];
+
 // Occasion cards — the single source of truth for the card grid. One row per
 // preset (coverage-tested). `label` is the everyday occasion noun shown on the
 // card and slotted into the mad-libs sentence; `about` seeds the lyric-theme blank
@@ -584,52 +653,100 @@ export function getOccasion(presetKey) {
 
 const VOCAL_DEFAULTS = new Set(["full-lead", "chant"]);
 
+// Seed a blank's default from the preset's curated doWords when one exactly
+// matches an option in that slot's pool (skipping `exclude` so a second blank
+// pulling from the same pool doesn't just repeat the first blank's word);
+// otherwise fall back to the pool's first option (or its first non-excluded
+// option).
+function seedDefault(pool, doWords, exclude) {
+  const match = (doWords || []).find((w) => pool.includes(w) && w !== exclude);
+  if (match) return match;
+  return pool.find((w) => w !== exclude) || pool[0];
+}
+
 // A renderable mad-libs template for the occasion. `parts` interleaves literal
-// text with blank descriptors {slot,pool,default}; the UI renders each blank as a
-// pre-filled editable chip/field so there is never an empty box. The sentence is
-// sound-only now — the lyric theme lives in its own always-visible UI control
-// (see Task 4), not as a blank here.
+// text with blank descriptors {slot,pool,default,control}; the UI renders each
+// `control:"select"` blank as a pre-filled <select> so there is never an empty
+// box. The sentence is sound-only — the lyric theme lives in its own
+// always-visible UI control (see Task 4), not as a blank here.
 export function occasionSentence(preset) {
   const occ = getOccasion(preset.key);
   const label = occ ? occ.label : preset.label.toLowerCase();
   const d = preset.doWords || [];
+  const energyDefault = seedDefault(ENERGY, d);
+  const percussionDefault = seedDefault(PERCUSSION, d);
+  const peakDefault = seedDefault(PEAK, d);
+  const blank = (slot, pool, def) => ({
+    slot,
+    pool,
+    default: def,
+    control: "select",
+  });
   if (VOCAL_DEFAULTS.has(preset.vocalDefault)) {
     return {
       category: "vocal",
       parts: [
         "A ",
-        { slot: "vibe1", pool: "vibe", default: d[0] || "energetic" },
-        ` ${label} that feels `,
-        { slot: "vibe2", pool: "vibe", default: d[1] || "driving" },
+        blank("energy", "ENERGY", energyDefault),
+        ` ${label} with `,
+        blank("vocal", "VOCAL", seedDefault(VOCAL, d)),
+        " vocals that feels ",
+        blank("mood", "MOOD", seedDefault(VIBES, d)),
+        ", over ",
+        blank("percussion", "PERCUSSION", percussionDefault),
+        " — landing on ",
+        blank("peak", "PEAK", peakDefault),
+        ".",
       ],
     };
   }
+  const textureDefault = seedDefault(TEXTURE, d);
   return {
     category: "instrumental",
     parts: [
-      `A ${label} that sounds `,
-      { slot: "texture", pool: "vibe", default: d[0] || "warm" },
-      " — instrumental, ",
-      { slot: "mood", pool: "vibe", default: d[1] || "steady" },
+      "A ",
+      blank("energy", "ENERGY", energyDefault),
+      ` ${label} that sounds `,
+      blank("texture", "TEXTURE", textureDefault),
+      " and ",
+      blank("texture2", "TEXTURE", seedDefault(TEXTURE, d, textureDefault)),
+      ", ",
+      blank("arrangement", "ARRANGEMENT", seedDefault(ARRANGEMENT, d)),
+      " with ",
+      blank("percussion", "PERCUSSION", percussionDefault),
+      " — building to ",
+      blank("peak", "PEAK", peakDefault),
+      ".",
     ],
   };
 }
 
 // Map the filled sentence blanks onto existing planSet params. SCENE colors the
 // SOUND, VIBE are mood words. THEME no longer comes from here — it comes from
-// the dedicated lyrics-theme UI control (Task 4).
+// the dedicated lyrics-theme UI control (Task 4). `peak` is a mood phrase, not
+// a sound descriptor, so it's kept out of scene/vibe to keep both readable.
 export function blanksToPlanParams(preset, blanks = {}) {
+  const trimmed = (v) => String(v || "").trim();
   if (VOCAL_DEFAULTS.has(preset.vocalDefault)) {
+    const vocalPhrase =
+      trimmed(blanks.vocal) && `${trimmed(blanks.vocal)} vocals`;
     return {
-      scene: "",
-      vibe: [blanks.vibe1, blanks.vibe2]
-        .map((v) => String(v || "").trim())
-        .filter(Boolean),
+      scene: [vocalPhrase, trimmed(blanks.percussion)]
+        .filter(Boolean)
+        .join(", "),
+      vibe: [trimmed(blanks.energy), trimmed(blanks.mood)].filter(Boolean),
     };
   }
   return {
-    scene: String(blanks.texture || "").trim(),
-    vibe: [String(blanks.mood || "").trim()].filter(Boolean),
+    scene: [
+      trimmed(blanks.texture),
+      trimmed(blanks.texture2),
+      trimmed(blanks.arrangement),
+      trimmed(blanks.percussion),
+    ]
+      .filter(Boolean)
+      .join(", "),
+    vibe: [trimmed(blanks.energy)].filter(Boolean),
     theme: "",
   };
 }
