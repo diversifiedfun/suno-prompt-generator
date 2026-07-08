@@ -6,6 +6,7 @@ import {
   generatePrompt,
   normalize,
   SYSTEM_PROMPT,
+  buildStyleOptions,
 } from "./generator.js";
 
 describe("vocal delivery-mode lyric guidance", () => {
@@ -149,6 +150,60 @@ describe("offlineGenerate", () => {
   it("leaves vocalGender empty when the style names no gender", () => {
     const r = offlineGenerate("artist", "zzqq-nomatch", "");
     expect(["", "female", "male", "duet", "any"]).toContain(r.vocalGender);
+  });
+});
+
+describe("buildStyleOptions", () => {
+  it("returns Main plus one labeled option per variant, in order", () => {
+    const result = {
+      style: "indie pop, 100 bpm",
+      variants: ["lo-fi bedroom pop, 90 bpm", "synthwave, 110 bpm"],
+    };
+    expect(buildStyleOptions(result)).toEqual([
+      { label: "Main", text: "indie pop, 100 bpm" },
+      { label: "Variant 1", text: "lo-fi bedroom pop, 90 bpm" },
+      { label: "Variant 2", text: "synthwave, 110 bpm" },
+    ]);
+  });
+
+  it("returns just Main when there are no variants", () => {
+    const result = { style: "indie pop, 100 bpm", variants: [] };
+    expect(buildStyleOptions(result)).toEqual([
+      { label: "Main", text: "indie pop, 100 bpm" },
+    ]);
+  });
+
+  it("returns just Main when variants is missing entirely", () => {
+    const result = { style: "indie pop, 100 bpm" };
+    expect(buildStyleOptions(result)).toEqual([
+      { label: "Main", text: "indie pop, 100 bpm" },
+    ]);
+  });
+
+  it("filters out blank/whitespace-only variant entries", () => {
+    const result = {
+      style: "indie pop, 100 bpm",
+      variants: ["lo-fi bedroom pop, 90 bpm", "", "   "],
+    };
+    expect(buildStyleOptions(result)).toEqual([
+      { label: "Main", text: "indie pop, 100 bpm" },
+      { label: "Variant 1", text: "lo-fi bedroom pop, 90 bpm" },
+    ]);
+  });
+
+  it("returns only non-empty variant options when style is blank", () => {
+    const result = {
+      style: "",
+      variants: ["synthwave, 110 bpm", ""],
+    };
+    expect(buildStyleOptions(result)).toEqual([
+      { label: "Variant 1", text: "synthwave, 110 bpm" },
+    ]);
+  });
+
+  it("returns an empty array when both style and variants are blank", () => {
+    const result = { style: "", variants: ["", "   "] };
+    expect(buildStyleOptions(result)).toEqual([]);
   });
 });
 

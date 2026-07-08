@@ -96,6 +96,21 @@ function extractJson(text) {
   return JSON.parse(fenced.slice(start, end + 1));
 }
 
+// Builds the labeled Style-picker options for a generate result: the main
+// style plus one entry per non-empty variant, in order. Pure — no DOM. Used
+// by sidepanel.js to render a toggle when there's more than one option.
+export function buildStyleOptions(result) {
+  const options = [];
+  const style = String(result?.style || "").trim();
+  if (style) options.push({ label: "Main", text: style });
+  const variants = Array.isArray(result?.variants) ? result.variants : [];
+  variants
+    .map((v) => String(v || "").trim())
+    .filter(Boolean)
+    .forEach((text, i) => options.push({ label: `Variant ${i + 1}`, text }));
+  return options;
+}
+
 // Clamp a slider recommendation to an integer 0–100; empty string if unusable.
 function clampPct(v) {
   const n = Math.round(Number(v));

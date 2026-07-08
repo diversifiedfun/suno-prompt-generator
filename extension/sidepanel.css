@@ -429,6 +429,19 @@ textarea {
   color: #fff;
 }
 
+/* ---- Style picker toggle (Vibe results — Main / Variant N) ---- */
+.style-toggle {
+  flex-wrap: wrap;
+  overflow: visible;
+  width: auto;
+  margin-bottom: 8px;
+}
+
+.style-toggle .mode-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
 /* ---- Loading indicator ---- */
 .loading {
   color: var(--ink-dim);

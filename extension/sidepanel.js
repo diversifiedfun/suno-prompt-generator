@@ -21,7 +21,7 @@ import {
   DESCRIPTOR_MAX,
 } from "./knowledge.js";
 
-import { generatePrompt, MODELS } from "./generator.js";
+import { generatePrompt, MODELS, buildStyleOptions } from "./generator.js";
 import { DEFAULT_MODEL } from "./constants.js";
 import {
   addPrompt,
@@ -831,13 +831,21 @@ function renderGenerateResults(container, result) {
     container.appendChild(note);
   }
 
+  // Which style option (main or a variant) is currently selected — shared
+  // between the Style picker and the paste button below.
+  const styleOptions = buildStyleOptions(result);
+  const styleSel = { idx: 0 };
+
   // One-click paste of the whole song (title + style + exclude + lyrics + slider
   // recommendations) into an open Suno tab. Status renders just beneath it.
   const pasteStatus = el("div", "settings-status");
   const pasteRow = el("div", "btn-row");
   const pasteBtn = el("button", "btn primary", "🎵 Paste all → Suno");
   pasteBtn.addEventListener("click", () =>
-    pasteVibeIntoSuno(result, pasteStatus),
+    pasteVibeIntoSuno(
+      { ...result, style: styleOptions[styleSel.idx]?.text ?? result.style },
+      pasteStatus,
+    ),
   );
   pasteRow.appendChild(pasteBtn);
   container.appendChild(pasteRow);
@@ -849,10 +857,8 @@ function renderGenerateResults(container, result) {
       buildResultSection("Title", result.title, "result-text"),
     );
   }
-  if (result.style) {
-    container.appendChild(
-      buildResultSection("Style", result.style, "result-text", true, result),
-    );
+  if (styleOptions.length) {
+    container.appendChild(buildStylePicker(styleOptions, styleSel));
   }
   if (result.exclude) {
     container.appendChild(
@@ -888,20 +894,75 @@ function renderGenerateResults(container, result) {
       buildResultSection("Tip", result.notes, "result-text notes-text"),
     );
   }
-  if (result.variants?.length) {
-    result.variants.forEach((v, i) => {
-      container.appendChild(
-        buildResultSection(
-          `Variant ${i + 1}`,
-          v,
-          "result-text",
-          true,
-          result,
-          true,
-        ),
-      );
-    });
+}
+
+// Renders the Style section for a generate result. With 2+ options (main +
+// variants) it shows a toggle above the style text; picking a toggle updates
+// the shown text and what Copy / Save operate on. With exactly one option it
+// renders identically to a plain buildResultSection("Style", ...) call — no
+// visual change for results with no variants.
+function buildStylePicker(styleOptions, styleSel) {
+  const section = el("div", "result-section");
+  section.appendChild(el("div", "result-label", "Style"));
+
+  const textEl = el("div", "result-text");
+  textEl.appendChild(txt(styleOptions[styleSel.idx].text));
+
+  if (styleOptions.length > 1) {
+    section.appendChild(buildStyleToggle(styleOptions, styleSel, textEl));
   }
+  section.appendChild(textEl);
+
+  const row = el("div", "btn-row");
+  const copyBtn = el("button", "btn", "Copy");
+  copyBtn.addEventListener("click", () =>
+    copyAndFlash(copyBtn, styleOptions[styleSel.idx].text),
+  );
+  row.appendChild(copyBtn);
+
+  const saveBtn = el("button", "btn", "Save to Library");
+  saveBtn.addEventListener("click", async () => {
+    try {
+      await addPrompt({
+        text: styleOptions[styleSel.idx].text,
+        title: "",
+        tags: [],
+        sourceUrl: "",
+        source: "generated",
+      });
+      saveBtn.textContent = "Saved!";
+      setTimeout(() => {
+        saveBtn.textContent = "Save to Library";
+      }, 1400);
+    } catch (err) {
+      console.error("[Suno] Save failed:", err.message);
+    }
+  });
+  row.appendChild(saveBtn);
+
+  section.appendChild(row);
+  return section;
+}
+
+// Segmented toggle (mirrors the .mode-toggle / .mode-btn pattern) for picking
+// which style option is active. Clicking updates styleSel.idx, restyles
+// .active, and re-renders textEl's content via textContent + txt() — never
+// innerHTML.
+function buildStyleToggle(styleOptions, styleSel, textEl) {
+  const toggle = el("div", "mode-toggle style-toggle");
+  const buttons = styleOptions.map((opt, i) => {
+    const btn = el("button", "mode-btn", opt.label);
+    if (i === styleSel.idx) btn.classList.add("active");
+    btn.addEventListener("click", () => {
+      styleSel.idx = i;
+      buttons.forEach((b, j) => b.classList.toggle("active", j === i));
+      textEl.textContent = "";
+      textEl.appendChild(txt(styleOptions[i].text));
+    });
+    toggle.appendChild(btn);
+    return btn;
+  });
+  return toggle;
 }
 
 // Builds one result card. savable=true shows "Save to library"; variantSave
