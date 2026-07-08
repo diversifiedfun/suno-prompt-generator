@@ -291,29 +291,51 @@
           <div id="album-mine-list"></div>
         </details>
 
-        <label class="field-label" for="album-seed">✨ Seed <span class="hint">(a vibe or an artist — the album's DNA)</span></label>
-        <div id="album-seed-saved" class="chips"></div>
-        <textarea id="album-seed" rows="2" placeholder="e.g. late night neon drive, warm and hypnotic…"></textarea>
-        <div id="album-seed-suggest" class="suggest hidden" role="listbox" aria-label="Suggestions"></div>
-        <div class="mode-toggle" role="group" aria-label="Seed mode">
-          <button class="mode-btn active" data-amode="vibe" id="album-mode-vibe" type="button">Vibe</button>
-          <button class="mode-btn" data-amode="artist" id="album-mode-artist" type="button">Artist</button>
-        </div>
-        <div id="album-artist-note" class="warn amber hidden">
-          <span class="ic">!</span>
-          <span>Artist seed is decomposed into descriptors — never the artist's name (Suno policy).</span>
-        </div>
+        <!-- Guided intake: one question per screen (see album-tab.js wizard controller). -->
+        <div class="wiz" id="album-wiz">
+          <div class="wiz-dots" id="album-wiz-dots" aria-hidden="true"></div>
 
-        <p class="field-label">Album type</p>
-        <div class="mode-toggle" role="group" aria-label="Album type">
-          <button class="mode-btn active" data-atype="cohesive" id="album-type-cohesive" type="button">Cohesive record</button>
-          <button class="mode-btn" data-atype="concept" id="album-type-concept" type="button">Concept album</button>
+          <!-- Step 1 — Seed (required) -->
+          <section class="wiz-step" data-step="0">
+            <p class="wiz-q">What's the album's DNA?</p>
+            <p class="wiz-hint">A vibe, or an artist whose sound you want. Everything else builds from this.</p>
+            <div class="mode-toggle" role="group" aria-label="Seed mode">
+              <button class="mode-btn active" data-amode="vibe" id="album-mode-vibe" type="button">Vibe</button>
+              <button class="mode-btn" data-amode="artist" id="album-mode-artist" type="button">Artist</button>
+            </div>
+            <div id="album-seed-saved" class="chips"></div>
+            <textarea id="album-seed" rows="2" placeholder="e.g. late night neon drive, warm and hypnotic…"></textarea>
+            <div id="album-seed-suggest" class="suggest hidden" role="listbox" aria-label="Suggestions"></div>
+            <div id="album-artist-note" class="warn amber hidden">
+              <span class="ic">!</span>
+              <span>Artist seed is decomposed into descriptors — never the artist's name (Suno policy).</span>
+            </div>
+          </section>
+
+          <!-- Step 2 — Album type -->
+          <section class="wiz-step" data-step="1" hidden>
+            <p class="wiz-q">What kind of album?</p>
+            <p class="wiz-hint">Cohesive = varied songs, one sound. Concept = one story across the tracks.</p>
+            <div class="mode-toggle" role="group" aria-label="Album type">
+              <button class="mode-btn active" data-atype="cohesive" id="album-type-cohesive" type="button">Cohesive record</button>
+              <button class="mode-btn" data-atype="concept" id="album-type-concept" type="button">Concept album</button>
+            </div>
+          </section>
+
+          <!-- Step 3 — Tracks + build -->
+          <section class="wiz-step" data-step="2" hidden>
+            <p class="wiz-q">How many tracks?</p>
+            <p class="wiz-hint">A typical record runs 8–12.</p>
+            <input type="number" id="album-count" min="3" max="20" value="10" />
+            <button class="btn primary block" id="album-plan">💿 Build album</button>
+          </section>
+
+          <div class="wiz-nav">
+            <button class="btn ghost" id="album-wiz-back" type="button">← Back</button>
+            <span class="wiz-count" id="album-wiz-count"></span>
+            <button class="btn primary" id="album-wiz-next" type="button">Next →</button>
+          </div>
         </div>
-
-        <label class="field-label" for="album-count">How many tracks</label>
-        <input type="number" id="album-count" min="3" max="20" value="10" />
-
-        <button class="btn primary" id="album-plan">Build album</button>
       </div>
       <div id="album-stage-b" class="hidden"></div>
       <div id="album-stage-c" class="hidden"></div>

@@ -57,6 +57,7 @@ export function renderAlbumTab() {
   });
 
   $a("album-plan").addEventListener("click", onPlanAlbum);
+  initAlbumWizard();
   renderMyAlbums();
   renderSeedSources();
 }
@@ -152,10 +153,59 @@ async function openAlbum(id) {
   }
 }
 
+// --- Guided wizard (stage A): reveal one intake step at a time. Inputs stay in
+// the DOM the whole time, so every $a()/onPlanAlbum read is untouched. The seed
+// (step 0) is the single required choice. ---
+const ALBUM_WIZ_STEPS = 3;
+let albumWizStep = 0;
+
+function gotoAlbumWizStep(i) {
+  const dots = $a("album-wiz-dots");
+  if (!dots) return; // wizard markup absent (defensive)
+  albumWizStep = Math.max(0, Math.min(ALBUM_WIZ_STEPS - 1, i));
+  for (const s of document.querySelectorAll("#album-wiz .wiz-step"))
+    s.hidden = Number(s.dataset.step) !== albumWizStep;
+  const kids = dots.children;
+  for (let d = 0; d < kids.length; d++) {
+    kids[d].classList.toggle("on", d === albumWizStep);
+    kids[d].classList.toggle("done", d < albumWizStep);
+  }
+  $a("album-wiz-back").style.visibility =
+    albumWizStep === 0 ? "hidden" : "visible";
+  $a("album-wiz-next").hidden = albumWizStep === ALBUM_WIZ_STEPS - 1;
+  $a("album-wiz-count").textContent =
+    `Step ${albumWizStep + 1} of ${ALBUM_WIZ_STEPS}`;
+}
+
+function initAlbumWizard() {
+  const dots = $a("album-wiz-dots");
+  if (!dots || dots.dataset.init) return;
+  dots.dataset.init = "1";
+  for (let i = 0; i < ALBUM_WIZ_STEPS; i++) {
+    const dot = document.createElement("span");
+    dot.className = "wiz-dot";
+    dots.appendChild(dot);
+  }
+  $a("album-wiz-back").addEventListener("click", () =>
+    gotoAlbumWizStep(albumWizStep - 1),
+  );
+  $a("album-wiz-next").addEventListener("click", () => {
+    if (albumWizStep === 0 && !$a("album-seed").value.trim()) {
+      $a("album-status").textContent =
+        "Add a vibe or artist to seed the album.";
+      return;
+    }
+    $a("album-status").textContent = "";
+    gotoAlbumWizStep(albumWizStep + 1);
+  });
+  gotoAlbumWizStep(0);
+}
+
 function showStage(which) {
   $a("album-stage-a").classList.toggle("hidden", which !== "a");
   $a("album-stage-b").classList.toggle("hidden", which !== "b");
   $a("album-stage-c").classList.toggle("hidden", which !== "c");
+  if (which === "a") gotoAlbumWizStep(0); // reopened intake starts at step 1
 }
 
 async function onPlanAlbum() {
