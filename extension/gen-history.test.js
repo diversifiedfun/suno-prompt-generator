@@ -144,11 +144,29 @@ describe("generation history", () => {
     expect(all.map((r) => r.id)).toEqual([b.id]);
   });
 
-  it("clears all generation history records", async () => {
+  it("clears all UNSTARRED generation history records", async () => {
     await addGeneration({ mode: "vibe", input: "A", result: FULL_RESULT });
     await addGeneration({ mode: "vibe", input: "B", result: FULL_RESULT });
     await clearGenerations();
     const all = await getAllGenerations();
     expect(all).toHaveLength(0);
+  });
+
+  it("Clear all keeps starred records (kept forever)", async () => {
+    const keep = await addGeneration({
+      mode: "vibe",
+      input: "keep-me",
+      result: FULL_RESULT,
+    });
+    await addGeneration({
+      mode: "vibe",
+      input: "drop-me",
+      result: FULL_RESULT,
+    });
+    await toggleStar(keep.id);
+    await clearGenerations();
+    const all = await getAllGenerations();
+    expect(all.map((r) => r.id)).toEqual([keep.id]);
+    expect(all[0].starred).toBe(true);
   });
 });

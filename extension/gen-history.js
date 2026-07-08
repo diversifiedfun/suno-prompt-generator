@@ -105,6 +105,10 @@ export async function toggleStar(id) {
 
 // Cap applies to UNSTARRED records only: keep every starred entry plus the
 // MAX_RECORDS newest unstarred, drop older unstarred beyond that.
+// TODO(race): enforceCap and toggleStar both do non-atomic read-then-write on
+// chrome.storage.local with no lock. If a boundary record is starred in the same
+// tick a cap-triggering addGeneration runs, the star could be lost or the record
+// resurrected. Narrow single-panel window; accepted for now (would need a mutex).
 async function enforceCap() {
   const all = await getAllGenerations(); // newest first
   const overflowKeys = all
@@ -126,8 +130,10 @@ export async function deleteGeneration(id) {
   await storageRemove([`genhist_${id}`]);
 }
 
+// Clear the history but KEEP starred records — "starred = kept forever" must
+// hold even here, so Clear all only drops unstarred entries.
 export async function clearGenerations() {
-  const all = await storageGetAll();
-  const keys = Object.keys(all).filter((key) => key.startsWith("genhist_"));
-  await storageRemove(keys);
+  const all = await getAllGenerations();
+  const keys = all.filter((r) => !r.starred).map((r) => `genhist_${r.id}`);
+  if (keys.length) await storageRemove(keys);
 }

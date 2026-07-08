@@ -1243,7 +1243,8 @@ function loadGeneration(entry) {
 document
   .getElementById("gen-history-clear")
   .addEventListener("click", async () => {
-    if (!confirm("Clear all recent generations?")) return;
+    if (!confirm("Clear unstarred generations? Starred entries are kept."))
+      return;
     try {
       await clearGenerations();
       renderGenHistory();
