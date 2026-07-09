@@ -10,7 +10,10 @@ const PLAYLIST_BASE = "https://studio-api-prod.suno.com/api/playlist";
 const GEN_BASE = "https://studio-api-prod.suno.com/api/gen";
 const MAX_PLAYLIST_PAGES = 200;
 const WAV_POLL_INTERVAL_MS = 2000;
-const WAV_POLL_TIMEOUT_MS = 90000;
+// Cold first-time WAV conversions on Suno's side can take a few minutes
+// (already-converted clips return in ~1s). 5 min covers cold ones in one pass;
+// a "Retry failed" button handles the rare straggler without re-downloading.
+const WAV_POLL_TIMEOUT_MS = 300000;
 const LOGIN_MESSAGE = "Open suno.com and log in first, then try again.";
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -201,7 +204,7 @@ async function requestWavConversion(clipId, getToken) {
 // ready (404/409/425 — caller retries). `revoke: true` means `url` is a blob:
 // URL this tab created and must eventually release. Throws on a persistent
 // 401 (session genuinely gone) so the caller fails fast with a clear message
-// instead of a misleading 90s timeout.
+// instead of a misleading full-timeout wait.
 async function fetchWavPayload(clipId, getToken) {
   const res = await authedFetch(
     `${GEN_BASE}/${clipId}/wav_file/`,
@@ -230,7 +233,7 @@ async function waitForWav(clipId, getToken) {
     if (payload) return payload;
     await sleep(WAV_POLL_INTERVAL_MS);
   }
-  throw new Error("WAV conversion never finished (timed out after 90s).");
+  throw new Error("still converting after 5 min — hit Retry in a moment.");
 }
 
 function downloadFile(url, filename) {
@@ -254,65 +257,91 @@ function downloadFile(url, filename) {
 // correct numbering) — one track failing never stops the rest. Calls
 // `onProgress({ index, total, title, state, error? })` as each track moves
 // through converting → downloading → done/failed. Returns a summary object.
-export async function downloadPlaylistAsWav(urlOrId, { onProgress } = {}) {
-  const playlistId = parsePlaylistId(urlOrId);
-  if (!playlistId) {
-    throw new Error("Couldn't find a playlist id in that URL.");
-  }
-
+// Find a logged-in suno.com tab and return a per-request token provider.
+// Throws LOGIN_MESSAGE if there's no tab or the session isn't logged in.
+async function acquireToken() {
   const tab = await findSunoTab();
   if (!tab) throw new Error(LOGIN_MESSAGE);
   const getToken = makeTokenProvider(tab.id);
-  if (!(await getToken())) throw new Error(LOGIN_MESSAGE); // guard: not logged in
+  if (!(await getToken())) throw new Error(LOGIN_MESSAGE);
+  return getToken;
+}
 
-  const { name, tracks } = await fetchPlaylistClips(playlistId);
-  if (!tracks.length) {
-    throw new Error("That playlist has no tracks (or couldn't be read).");
+// Convert one clip to WAV and download it as folder/NN - title.wav. Throws on
+// failure (caller records it). Shared by the initial run and "retry failed"
+// so numbering + filenames stay identical across a retry.
+async function processOneTrack(item, total, folder, getToken, onProgress) {
+  const { id, index, title } = item;
+  onProgress?.({ index, total, title, state: "converting" });
+  const payload = await waitForWav(id, getToken);
+  onProgress?.({ index, total, title, state: "downloading" });
+  const filename = `${folder}/${trackFilename(index, total, title)}`;
+  try {
+    await downloadFile(payload.url, filename);
+  } finally {
+    // Always release a blob: URL we created — even if the download threw.
+    // (A JSON-sourced payload has revoke:false, so this is a no-op there.)
+    if (payload.revoke) {
+      setTimeout(() => URL.revokeObjectURL(payload.url), 60000);
+    }
   }
-  const folder = sanitizeFilename(name, "Suno Playlist");
-  const total = tracks.length;
+  onProgress?.({ index, total, title, state: "done" });
+}
 
-  const results = [];
-  for (let i = 0; i < total; i++) {
-    const track = tracks[i];
-    const index = i + 1;
-    onProgress?.({ index, total, title: track.title, state: "converting" });
+// Run a list of { id, index, title } items sequentially (politeness + correct
+// numbering). One failing never stops the rest. Returns a summary whose
+// `failedItems` can be handed straight back to retryTracks().
+async function runTrackDownloads(items, total, folder, getToken, onProgress) {
+  const failedItems = [];
+  let downloaded = 0;
+  for (const item of items) {
     try {
-      const payload = await waitForWav(track.id, getToken);
-      onProgress?.({ index, total, title: track.title, state: "downloading" });
-      const filename = `${folder}/${trackFilename(index, total, track.title)}`;
-      try {
-        await downloadFile(payload.url, filename);
-      } finally {
-        // Always release a blob: URL we created — even if the download threw.
-        // (A JSON-sourced payload has revoke:false, so this is a no-op there.)
-        if (payload.revoke) {
-          setTimeout(() => URL.revokeObjectURL(payload.url), 60000);
-        }
-      }
-      results.push({ index, title: track.title, ok: true });
-      onProgress?.({ index, total, title: track.title, state: "done" });
+      await processOneTrack(item, total, folder, getToken, onProgress);
+      downloaded++;
     } catch (err) {
-      console.error(`[Suno WAV] Track ${index} (${track.title}) failed:`, err);
-      results.push({
-        index,
-        title: track.title,
-        ok: false,
-        error: err.message,
-      });
+      console.error(
+        `[Suno WAV] Track ${item.index} (${item.title}) failed:`,
+        err,
+      );
+      failedItems.push(item);
       onProgress?.({
-        index,
+        index: item.index,
         total,
-        title: track.title,
+        title: item.title,
         state: "failed",
         error: err.message,
       });
     }
   }
+  return { folder, total, downloaded, failed: failedItems.length, failedItems };
+}
 
-  const downloaded = results.filter((r) => r.ok).length;
-  const failed = results.length - downloaded;
-  return { folder, total, downloaded, failed, results };
+// Calls `onProgress({ index, total, title, state, error? })` as each track
+// moves through converting → downloading → done/failed.
+export async function downloadPlaylistAsWav(urlOrId, { onProgress } = {}) {
+  const playlistId = parsePlaylistId(urlOrId);
+  if (!playlistId) {
+    throw new Error("Couldn't find a playlist id in that URL.");
+  }
+  const getToken = await acquireToken();
+  const { name, tracks } = await fetchPlaylistClips(playlistId);
+  if (!tracks.length) {
+    throw new Error("That playlist has no tracks (or couldn't be read).");
+  }
+  const folder = sanitizeFilename(name, "Suno Playlist");
+  const items = tracks.map((t, i) => ({
+    id: t.id,
+    index: i + 1,
+    title: t.title,
+  }));
+  return runTrackDownloads(items, tracks.length, folder, getToken, onProgress);
+}
+
+// Re-download only the given tracks, reusing the original folder + numbering
+// so the already-downloaded good ones aren't touched (no duplicates).
+export async function retryTracks(items, total, folder, { onProgress } = {}) {
+  const getToken = await acquireToken();
+  return runTrackDownloads(items, total, folder, getToken, onProgress);
 }
 
 // ---------------------------------------------------------------------------
@@ -354,39 +383,84 @@ async function prefillFromActiveTab() {
 }
 
 let busy = false;
+const trackRows = new Map(); // index → row element, reused so retries update in place
+let retryBtn = null;
 
-async function onStartClick() {
-  if (busy) return; // one download run at a time
-  const input = $w("wav-url");
+// Shared run wrapper for the initial download and "retry failed": renders
+// per-track progress into trackRows and, when done, offers a retry button for
+// whatever still failed. `runner(onProgress)` returns a summary.
+async function runDownload(runner, statusPrefix) {
+  if (busy) return; // one run at a time
   const status = $w("wav-status");
   const list = $w("wav-list");
   const startBtn = $w("wav-start");
-  const urlOrId = input?.value.trim() || "";
-
-  list.textContent = "";
-  status.textContent = "";
-  status.classList.remove("warn");
 
   busy = true;
   startBtn.disabled = true;
+  if (retryBtn) retryBtn.disabled = true;
+  status.classList.remove("warn");
   try {
-    status.textContent = "Reading the playlist…";
-    const rows = new Map();
-    const summary = await downloadPlaylistAsWav(urlOrId, {
-      onProgress: (progress) => {
-        renderTrackRow(list, rows, progress);
-        status.textContent = `Track ${progress.index} of ${progress.total}…`;
-      },
+    status.textContent = statusPrefix;
+    const summary = await runner((progress) => {
+      renderTrackRow(list, trackRows, progress);
+      status.textContent = `Track ${progress.index} of ${progress.total}…`;
     });
     status.textContent = `Done — ${summary.folder} (${summary.downloaded} downloaded · ${summary.failed} failed)`;
+    renderRetry(summary);
   } catch (err) {
-    console.error("[Suno WAV] Playlist download failed:", err);
+    console.error("[Suno WAV] Download failed:", err);
     status.textContent = err.message || "Something went wrong.";
     status.classList.add("warn");
   } finally {
     busy = false;
     startBtn.disabled = false;
   }
+}
+
+async function onStartClick() {
+  const input = $w("wav-url");
+  const list = $w("wav-list");
+  const urlOrId = input?.value.trim() || "";
+  // Fresh run: clear rows + any leftover retry button.
+  list.textContent = "";
+  trackRows.clear();
+  if (retryBtn) {
+    retryBtn.remove();
+    retryBtn = null;
+  }
+  $w("wav-status").textContent = "";
+  await runDownload(
+    (onProgress) => downloadPlaylistAsWav(urlOrId, { onProgress }),
+    "Reading the playlist…",
+  );
+}
+
+// Show a "Retry failed" button when a run left stragglers (e.g. a cold
+// conversion that outran the timeout). Retrying reuses the same folder +
+// numbering and only touches the failed rows, so good downloads aren't dup'd.
+function renderRetry(summary) {
+  if (retryBtn) {
+    retryBtn.remove();
+    retryBtn = null;
+  }
+  if (!summary.failed) return;
+  retryBtn = el(
+    "button",
+    "btn primary block",
+    `↻ Retry ${summary.failed} failed`,
+  );
+  retryBtn.type = "button";
+  retryBtn.style.marginTop = "10px";
+  retryBtn.addEventListener("click", () =>
+    runDownload(
+      (onProgress) =>
+        retryTracks(summary.failedItems, summary.total, summary.folder, {
+          onProgress,
+        }),
+      `Retrying ${summary.failed}…`,
+    ),
+  );
+  $w("wav-list").after(retryBtn);
 }
 
 const STATE_ICON = {
