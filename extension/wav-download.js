@@ -115,6 +115,39 @@ async function getSunoToken(tabId) {
   return results?.[0]?.result ?? null;
 }
 
+// A token provider that caches the Clerk token but refreshes it when it ages
+// out (Clerk tokens have a ~60s TTL) or when forced. getToken(true) forces a
+// fresh pull. Keeps a long multi-track run from dying on an expired token.
+function makeTokenProvider(tabId) {
+  let token = null;
+  let fetchedAt = 0;
+  return async (force = false) => {
+    if (force || !token || Date.now() - fetchedAt > 45000) {
+      token = await getSunoToken(tabId);
+      fetchedAt = Date.now();
+    }
+    return token;
+  };
+}
+
+// Fetch with a Bearer token; on a 401 refresh the token once and retry, so a
+// token that expired mid-run recovers transparently. 30s per-request timeout
+// so a hung connection can never wedge the run.
+async function authedFetch(url, init, getToken) {
+  const build = (tok) => ({
+    ...init,
+    headers: { ...(init && init.headers), Authorization: `Bearer ${tok}` },
+    signal: AbortSignal.timeout(30000),
+  });
+  let token = await getToken();
+  let res = await fetch(url, build(token));
+  if (res.status === 401) {
+    token = await getToken(true); // force a fresh token, then retry once
+    if (token) res = await fetch(url, build(token));
+  }
+  return res;
+}
+
 // Paginate the (public, unauthenticated) playlist listing until every clip
 // is collected, an empty page is returned, or the hard page cap is hit.
 async function fetchPlaylistClips(playlistId) {
@@ -122,7 +155,9 @@ async function fetchPlaylistClips(playlistId) {
   let name = "";
   let expectedTotal = null;
   for (let page = 1; page <= MAX_PLAYLIST_PAGES; page++) {
-    const res = await fetch(`${PLAYLIST_BASE}/${playlistId}/?page=${page}`);
+    const res = await fetch(`${PLAYLIST_BASE}/${playlistId}/?page=${page}`, {
+      signal: AbortSignal.timeout(30000),
+    });
     if (!res.ok) {
       throw new Error(`Couldn't load the playlist (HTTP ${res.status}).`);
     }
@@ -145,25 +180,38 @@ async function fetchPlaylistClips(playlistId) {
   return { name, tracks };
 }
 
-async function requestWavConversion(clipId, token) {
-  // Idempotent on Suno's side — safe to call even if already converted.
-  await fetch(`${GEN_BASE}/${clipId}/convert_wav/`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  }).catch((err) => {
-    // A convert-kick failure isn't fatal by itself — the poll loop below is
-    // the real source of truth on whether the WAV ever becomes ready.
+async function requestWavConversion(clipId, getToken) {
+  // Idempotent on Suno's side. Non-fatal on its own — the poll loop is the
+  // real source of truth — but log a distinct message if it's rejected.
+  try {
+    const res = await authedFetch(
+      `${GEN_BASE}/${clipId}/convert_wav/`,
+      { method: "POST" },
+      getToken,
+    );
+    if (!res.ok) {
+      console.warn(`[Suno WAV] convert_wav ${clipId} → HTTP ${res.status}`);
+    }
+  } catch (err) {
     console.warn(`[Suno WAV] convert_wav kick failed for ${clipId}:`, err);
-  });
+  }
 }
 
-// Poll wav_file until it's ready. Returns { url, revoke } — `revoke: true`
-// means `url` is a blob: URL this tab created and must eventually release.
-async function fetchWavPayload(clipId, token) {
-  const res = await fetch(`${GEN_BASE}/${clipId}/wav_file/`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return null; // not ready yet (404/409/425) — caller retries
+// Poll wav_file once. Returns { url, revoke } when ready, null when not yet
+// ready (404/409/425 — caller retries). `revoke: true` means `url` is a blob:
+// URL this tab created and must eventually release. Throws on a persistent
+// 401 (session genuinely gone) so the caller fails fast with a clear message
+// instead of a misleading 90s timeout.
+async function fetchWavPayload(clipId, getToken) {
+  const res = await authedFetch(
+    `${GEN_BASE}/${clipId}/wav_file/`,
+    {},
+    getToken,
+  );
+  if (res.status === 401) {
+    throw new Error("Suno session expired — reload suno.com and try again.");
+  }
+  if (!res.ok) return null;
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("audio")) {
     const blob = await res.blob();
@@ -174,11 +222,11 @@ async function fetchWavPayload(clipId, token) {
   return url ? { url, revoke: false } : null;
 }
 
-async function waitForWav(clipId, token) {
-  await requestWavConversion(clipId, token);
+async function waitForWav(clipId, getToken) {
+  await requestWavConversion(clipId, getToken);
   const deadline = Date.now() + WAV_POLL_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const payload = await fetchWavPayload(clipId, token);
+    const payload = await fetchWavPayload(clipId, getToken);
     if (payload) return payload;
     await sleep(WAV_POLL_INTERVAL_MS);
   }
@@ -214,8 +262,8 @@ export async function downloadPlaylistAsWav(urlOrId, { onProgress } = {}) {
 
   const tab = await findSunoTab();
   if (!tab) throw new Error(LOGIN_MESSAGE);
-  const token = await getSunoToken(tab.id);
-  if (!token) throw new Error(LOGIN_MESSAGE);
+  const getToken = makeTokenProvider(tab.id);
+  if (!(await getToken())) throw new Error(LOGIN_MESSAGE); // guard: not logged in
 
   const { name, tracks } = await fetchPlaylistClips(playlistId);
   if (!tracks.length) {
@@ -230,13 +278,17 @@ export async function downloadPlaylistAsWav(urlOrId, { onProgress } = {}) {
     const index = i + 1;
     onProgress?.({ index, total, title: track.title, state: "converting" });
     try {
-      const payload = await waitForWav(track.id, token);
+      const payload = await waitForWav(track.id, getToken);
       onProgress?.({ index, total, title: track.title, state: "downloading" });
       const filename = `${folder}/${trackFilename(index, total, track.title)}`;
-      await downloadFile(payload.url, filename);
-      if (payload.revoke) {
-        // Give the download a moment to pick the blob up before releasing it.
-        setTimeout(() => URL.revokeObjectURL(payload.url), 60000);
+      try {
+        await downloadFile(payload.url, filename);
+      } finally {
+        // Always release a blob: URL we created — even if the download threw.
+        // (A JSON-sourced payload has revoke:false, so this is a no-op there.)
+        if (payload.revoke) {
+          setTimeout(() => URL.revokeObjectURL(payload.url), 60000);
+        }
       }
       results.push({ index, title: track.title, ok: true });
       onProgress?.({ index, total, title: track.title, state: "done" });
