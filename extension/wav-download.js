@@ -414,6 +414,11 @@ async function runDownload(runner, statusPrefix) {
   } finally {
     busy = false;
     startBtn.disabled = false;
+    // Re-enable retry even when the run errored out entirely (e.g. the
+    // suno.com tab was closed → acquireToken threw before renderRetry ran),
+    // so the button that exists to recover from failures can't get stuck.
+    // No-op on the success path — renderRetry has already replaced it.
+    if (retryBtn) retryBtn.disabled = false;
   }
 }
 
