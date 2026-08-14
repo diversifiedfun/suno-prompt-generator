@@ -134,8 +134,23 @@ reliably. **Official glossary + Confirmed community list.**
 | Rock | guitar solos | "no guitar solo" if unwanted |
 | EDM | harsh screech leads | "warm plucks, controlled highs" |
 | Rap / Hip-hop | ad-libs, background shouts | "single lead vocal only, no ad-libs" |
+| Any "live" / "room" texture wording | **audience, crowd noise, applause, hall reverb** | say "studio production", "brushed kit with a loose human feel", "dry intimate vocal presence" |
 
 **Confirmed.**
+
+- 🚨 **NEVER append the exclude list to the Style string.** Suno has no negation parser — a
+  joined string ("…unforced chorus **and** live recording, audience noise, crowd, applause…")
+  is read as a **request for every one of those things**. Excludes go in the separate
+  **Exclude Styles** box or nowhere at all. *Observed 2026-08-13 on Nova Reign "Green Flag":
+  the exclude list was pasted inline with "and", which asked Suno for audience noise, applause,
+  over-belted oversinging and wall-of-sound compression — the exact opposite of the intent.*
+  **Confirmed (observed).**
+- **Corollary — "live" is a venue word, not a performance-feel word.** `live-room feel`,
+  `live drums`, `room tone`, `spacious room tone` all summon a concert recording. To get
+  *played-by-humans* without an audience, say **"brushed drums"**, **"loose human feel"**,
+  **"organic feel"**, **"close-mic'd"**, **"dry intimate vocal presence"**. **Confirmed (observed).**
+- Both of the above compound with the ~2-exclusion rule above: a long exclude list is already
+  destabilizing *even in the right field*. Trim to the 2–3 that matter, each with a replacement.
 
 ---
 
