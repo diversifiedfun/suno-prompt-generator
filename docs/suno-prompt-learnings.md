@@ -152,6 +152,18 @@ reliably. **Official glossary + Confirmed community list.**
 - Both of the above compound with the ~2-exclusion rule above: a long exclude list is already
   destabilizing *even in the right field*. Trim to the 2–3 that matter, each with a replacement.
 
+- 🚨 **A bare lyric line that NAMES A SOUND gets rendered as that sound.** Confirmed 2026-08-19
+  (observed): *Static Between Us* ends `Just static / Static / Static` — Suno generated ~4 minutes
+  of literal static noise, turning a 3-minute song into **7:59**. Same failure family as bare
+  `Whisper`/`Belt` cue words: **a word alone on a line, with no melodic anchor, is read as an
+  instruction, not as a lyric.** Applies to *static, silence, feedback, noise, echo, ringing,
+  drums, applause*.
+  **Fix:** never leave a sound-word isolated — anchor it in a sung phrase
+  (`Just static between us`, not `Static`). And don't reinforce it from the Style field:
+  this track also asked for *"shimmering high-frequency shimmer"*.
+  **Detect:** duration ÷ total words. Healthy is 0.50–0.65 sec/word; this clip was **1.41**.
+  Any track over ~0.9 has dead air in it.
+
 ---
 
 ## 8. Advanced techniques
