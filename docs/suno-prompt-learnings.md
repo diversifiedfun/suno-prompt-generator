@@ -279,3 +279,30 @@ Official: help.suno.com (articles 2415873, 2462273, 5782849, 5782593, 5782977, 5
 jackrighteous.com, roo.beehiiv.com, hookgenius.app, suno.bi, sunoarchitect.com,
 alex-hustler / james-palm / travisnicholson (Medium), learnprompting.org, Jamie Aplin (YT),
 and the originating Musci.io guide.
+
+## A "too short" song is often a truncated lyric, not a density problem
+
+Before reaching for tempo or repetition, **list the section tags**. A song that runs
+`Intro → Verse → Pre-Chorus → Chorus → Verse → Pre-Chorus` and stops has no ending — it is not
+crammed, it is unfinished. Measured case: a 1:46 track at 0.39 sec/word whose lyric ended after
+the second Pre-Chorus. Writing the missing final chorus, bridge and outro (273 → 466 words) took
+it to 3:25 with no change to tempo or arrangement.
+
+Diagnostic order:
+1. **Section list** — is there an ending at all?
+2. **Word count** — under ~300 words nothing will reach 3:30 at a sane tempo.
+3. **Only then** density (`duration ÷ words`; healthy 0.50–0.65).
+
+## Slowing the tempo lengthens a track more than expected
+
+Re-cutting at a lower BPM with a sparser arrangement raised sec/word substantially without a
+single lyric change: 0.46 → 0.67 (95→88 BPM), 0.51 → 0.64 (95→76), 0.40 → 0.55 (→76).
+Useful, but it **overshoots**: an 88 BPM re-cut of a 3:27 song came back at 5:04. When a track is
+already near 4:00, drop 4–8 BPM, not 15.
+
+## Bracket tags that are not section names get performed
+
+`[Vocal Chop]` and `[Stutter]` are production directions, not structure. Suno treats a bracketed
+line as a section header and can render it. Keep to
+`[Intro] [Verse N] [Pre-Chorus] [Chorus] [Final Chorus] [Bridge] [Outro]`; put production
+directions in the Style string and ad-libs in `(parentheses)`.
