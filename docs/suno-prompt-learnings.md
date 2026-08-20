@@ -306,3 +306,27 @@ already near 4:00, drop 4–8 BPM, not 15.
 line as a section header and can render it. Keep to
 `[Intro] [Verse N] [Pre-Chorus] [Chorus] [Final Chorus] [Bridge] [Outro]`; put production
 directions in the Style string and ad-libs in `(parentheses)`.
+
+## Style strings fail in two opposite directions
+
+- **Costume** — naming an era ("Motown", "doo-wop", "60s soul") makes the era the subject and the
+  result reads as pastiche.
+- **Filler** — "bright contemporary pop, glossy modern production" describes every pop song ever
+  written and steers nothing.
+
+Test every Style string with: **which specific reference track is this closest to?** No answer
+means it is one of the two failures above. Name real instruments, not vibes. A retro *instrument*
+inside a modern production is a gesture; a whole song built as a period piece is costume.
+
+## The arrangement must agree with what the lyric says
+
+Assigning textures to maximise variety will contradict the words. Three observed shapes:
+1. **The arrangement supplies what the lyric rejects** — call-and-response backing vocals under
+   "I don't need an audience".
+2. **A structural template smuggles in a register** — "track 8 is the floor" means *stripped*, not
+   *fragile*; a declaration of independence sung timidly sounds like self-doubt.
+3. **A borrowed genre carries its original subject** — doo-wop is devotion *to a boy*.
+
+Also: the album's world sets the palette, but **the individual song sets the temperature** — a
+chosen-peace lyric inside a cold record should still be warm. And **big ≠ busy**: a song in the
+peak slot can be serene if it is wide and lush rather than sparse.
