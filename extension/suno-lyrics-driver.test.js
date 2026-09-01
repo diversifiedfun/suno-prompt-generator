@@ -62,6 +62,15 @@ describe("chunkLyrics", () => {
     expect(parts.join("")).toBe(long);
   });
 
+  // Regression: the hard-split only runs when `cur` is empty. A long line
+  // arriving AFTER a buffered short one still splits, because a line longer than
+  // `size` always trips the flush first. Verified rather than assumed.
+  it("hard-splits a long line even when a short line is buffered", () => {
+    const parts = chunkLyrics("short line\n" + "x".repeat(1000), 350);
+    for (const p of parts) expect(p.length).toBeLessThanOrEqual(350);
+    expect(parts[0]).toBe("short line");
+  });
+
   it("keeps a single short lyric in one chunk", () => {
     expect(chunkLyrics("a\nb", 350)).toEqual(["a\nb"]);
   });
