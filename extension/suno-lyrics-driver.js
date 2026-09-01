@@ -138,6 +138,37 @@ export function chunkLyrics(text, size = CHUNK) {
 }
 
 /**
+ * Post-paste completion, shared by ALL THREE paste paths (sidepanel, album-tab,
+ * set-tab). They each send `suno-fill` and read the response, so a fix applied
+ * to only one of them leaves the other two silently broken — which is exactly
+ * how the lyrics regression survived: one code path was reviewed, three existed.
+ *
+ * Drives the contenteditable when the content script reports one, then collects
+ * every field that was missing or didn't stick.
+ * Returns a list of human-readable problems — empty means a genuinely clean paste.
+ */
+export async function collectPasteProblems(tabId, resp, lyrics, api = chrome) {
+  const problems = [];
+  if (resp && resp.needsTrustedInput) {
+    const r = await driveSunoLyrics(tabId, lyrics, api);
+    if (!r.ok && !r.skipped)
+      problems.push(`lyrics — ${r.error || "didn't land"}`);
+  }
+  for (const f of (resp && resp.missing) || [])
+    problems.push(`${f} — field not found`);
+  for (const f of (resp && resp.notStuck) || [])
+    problems.push(`${f} — didn't stick`);
+  return problems;
+}
+
+/** Prefix for a status line; "" when there is nothing to warn about. */
+export function pasteProblemsMessage(problems) {
+  return problems && problems.length
+    ? `Paste by hand: ${problems.join("; ")}. `
+    : "";
+}
+
+/**
  * Fill Suno's contenteditable lyrics editor via trusted CDP input.
  * Returns { ok, error?, wrote?, expected? } and never throws.
  */

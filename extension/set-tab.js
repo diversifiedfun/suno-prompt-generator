@@ -2,6 +2,10 @@
 // sidepanel.js so the guided-intake UI lives in a focused module. Owns stages
 // A (intake), B (arc gate) and C (tracks + journey strip).
 import { el, copyAndFlash, filterSelectOptions } from "./dom-utils.js";
+import {
+  collectPasteProblems,
+  pasteProblemsMessage,
+} from "./suno-lyrics-driver.js";
 import { GENRE_GROUPS } from "./knowledge.js";
 import {
   getPreset,
@@ -1224,7 +1228,9 @@ async function pasteIntoSuno(track, index) {
     }
   }
   if (resp && resp.ok) {
+    const problems = await collectPasteProblems(tabId, resp, payload.lyrics);
     $set("set-status").textContent =
+      pasteProblemsMessage(problems) +
       `Pasted track ${index + 1} into Suno — hit Create there, then Paste next.`;
     chrome.tabs.update(tabId, { active: true });
     const s = await getSet(currentSetId);

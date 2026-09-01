@@ -58,7 +58,10 @@ import {
   filterSelectOptions,
 } from "./dom-utils.js";
 import { driveSunoSliders, sliderPasteMessage } from "./suno-slider-driver.js";
-import { driveSunoLyrics } from "./suno-lyrics-driver.js";
+import {
+  collectPasteProblems,
+  pasteProblemsMessage,
+} from "./suno-lyrics-driver.js";
 import { renderSetTab } from "./set-tab.js";
 import { renderAlbumTab } from "./album-tab.js";
 import { renderWavTab } from "./wav-download.js";
@@ -1246,30 +1249,18 @@ async function pasteVibeIntoSuno(result, statusEl) {
   if (resp && resp.ok) {
     chrome.tabs.update(tabId, { active: true });
 
-    // Suno's lyrics field became a contenteditable (2026-09-01). The content
-    // script can't write one — drive it with trusted CDP input, same route the
-    // sliders use. Only runs when the content script says it found one.
-    const problems = [];
-    if (resp.needsTrustedInput) {
-      const lyr = await driveSunoLyrics(tabId, payload.lyrics);
-      if (!lyr.ok && !lyr.skipped)
-        problems.push(`lyrics — ${lyr.error || "didn't land"}`);
-    }
-    // Report anything the content script couldn't find or couldn't make stick,
-    // instead of claiming a clean paste.
-    for (const f of resp.missing || []) problems.push(`${f} — field not found`);
-    for (const f of resp.notStuck || []) problems.push(`${f} — didn't stick`);
+    // Suno's lyrics field became a contenteditable (2026-09-01) — drive it with
+    // trusted CDP input and surface anything that didn't land. Shared with
+    // album-tab and set-tab so all three paste paths behave identically.
+    const problems = await collectPasteProblems(tabId, resp, payload.lyrics);
 
     const values = {
       weirdness: result.weirdness,
       styleInfluence: result.styleInfluence,
     };
     const sliderResult = await driveSunoSliders(tabId, values);
-    const sliderMsg = sliderPasteMessage(sliderResult, values);
     setStatus(
-      problems.length
-        ? `Pasted, but paste by hand: ${problems.join("; ")}. ${sliderMsg}`
-        : sliderMsg,
+      pasteProblemsMessage(problems) + sliderPasteMessage(sliderResult, values),
     );
   } else {
     setStatus((resp && resp.error) || "Couldn't fill Suno's fields.");

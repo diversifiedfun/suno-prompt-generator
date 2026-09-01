@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { driveSunoLyrics, chunkLyrics } from "./suno-lyrics-driver.js";
+import {
+  driveSunoLyrics,
+  chunkLyrics,
+  collectPasteProblems,
+  pasteProblemsMessage,
+} from "./suno-lyrics-driver.js";
 
 // Fake chrome API. executeScript answers the "collect" call with geometry and
 // the "read" call with whatever the editor supposedly ended up holding — the
@@ -135,5 +140,46 @@ describe("driveSunoLyrics", () => {
     const r = await driveSunoLyrics(1, "   ", api);
     expect(r).toEqual({ ok: true, skipped: true });
     expect(api.calls.attach.length).toBe(0);
+  });
+});
+
+// collectPasteProblems is shared by all three paste paths (sidepanel, album-tab,
+// set-tab). The original regression survived because only one path was fixed.
+describe("collectPasteProblems", () => {
+  it("is empty for a genuinely clean paste", async () => {
+    const api = makeApi({ readBack: LYRIC });
+    const p = await collectPasteProblems(1, { ok: true, filled: ["style"] }, LYRIC, api);
+    expect(p).toEqual([]);
+    expect(pasteProblemsMessage(p)).toBe("");
+    expect(api.calls.attach.length).toBe(0); // no contenteditable -> no debugger
+  });
+
+  it("drives the contenteditable when the content script flags one", async () => {
+    const api = makeApi({ readBack: LYRIC });
+    const p = await collectPasteProblems(1, { ok: true, needsTrustedInput: true }, LYRIC, api);
+    expect(p).toEqual([]);
+    expect(api.calls.send.some((c) => c.method === "Input.insertText")).toBe(true);
+  });
+
+  it("surfaces a lyrics write that did not land", async () => {
+    const api = makeApi({ readBack: LYRIC.replace(/\n/g, "") });
+    const p = await collectPasteProblems(1, { ok: true, needsTrustedInput: true }, LYRIC, api);
+    expect(p.length).toBe(1);
+    expect(p[0]).toMatch(/^lyrics —/);
+    expect(pasteProblemsMessage(p)).toMatch(/Paste by hand/);
+  });
+
+  it("reports missing and not-stuck fields", async () => {
+    const api = makeApi({ readBack: LYRIC });
+    const p = await collectPasteProblems(
+      1, { ok: true, missing: ["exclude"], notStuck: ["style"] }, LYRIC, api,
+    );
+    expect(p).toEqual(["exclude — field not found", "style — didn't stick"]);
+  });
+
+  it("tolerates a response from an old content script", async () => {
+    const api = makeApi({ readBack: LYRIC });
+    expect(await collectPasteProblems(1, { ok: true }, LYRIC, api)).toEqual([]);
+    expect(await collectPasteProblems(1, undefined, LYRIC, api)).toEqual([]);
   });
 });

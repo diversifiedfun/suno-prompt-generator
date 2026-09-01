@@ -17,6 +17,10 @@ import {
 } from "./album-generator.js";
 import { getSettings, getAllVibes, getAllPrompts } from "./storage.js";
 import { driveSunoSliders, sliderPasteMessage } from "./suno-slider-driver.js";
+import {
+  collectPasteProblems,
+  pasteProblemsMessage,
+} from "./suno-lyrics-driver.js";
 import { attachAutocomplete } from "./autocomplete.js";
 import { ARTISTS, VIBE_WORDS } from "./suggest-data.js";
 
@@ -524,12 +528,15 @@ async function pasteAlbumTrack(track) {
   }
   if (resp && resp.ok) {
     chrome.tabs.update(tabId, { active: true });
+    const problems = await collectPasteProblems(tabId, resp, payload.lyrics);
     const values = {
       weirdness: track.weirdness,
       styleInfluence: track.styleInfluence,
     };
     const sliderResult = await driveSunoSliders(tabId, values);
-    setStatus(sliderPasteMessage(sliderResult, values));
+    setStatus(
+      pasteProblemsMessage(problems) + sliderPasteMessage(sliderResult, values),
+    );
   } else {
     setStatus((resp && resp.error) || "Couldn't fill Suno's fields.");
   }
