@@ -51,6 +51,17 @@ describe("chunkLyrics", () => {
     for (const p of parts) expect(p.length).toBeLessThanOrEqual(60 + 10);
   });
 
+  // A lyric whose newlines were already stripped upstream is ONE huge line —
+  // the line-boundary splitter alone would emit it as a single giant insert and
+  // defeat the chunking entirely.
+  it("hard-splits a single line longer than the chunk size", () => {
+    const long = "x".repeat(1000);
+    const parts = chunkLyrics(long, 350);
+    expect(parts.length).toBe(3);
+    for (const p of parts) expect(p.length).toBeLessThanOrEqual(350);
+    expect(parts.join("")).toBe(long);
+  });
+
   it("keeps a single short lyric in one chunk", () => {
     expect(chunkLyrics("a\nb", 350)).toEqual(["a\nb"]);
   });
@@ -90,6 +101,33 @@ describe("driveSunoLyrics", () => {
   it("FAILS on a truncated paste too (whatever the reason given)", async () => {
     const api = makeApi({ readBack: "[Intro]\nKeep going" });
     const r = await driveSunoLyrics(1, LYRIC, api);
+    expect(r.ok).toBe(false);
+  });
+
+  // OBSERVED ON THE LIVE EDITOR 2026-09-01: selectAll+delete failed to clear and
+  // the insert concatenated onto the leftovers — 2065 expected chars, 4130 present.
+  // Both verification checks were lower-bound only, so that read as a clean pass.
+  // Matters most in the multi-track flows (Set "Paste next", Album), where the
+  // field always already holds the previous track.
+  it("FAILS when the old lyric was not cleared and the new one concatenated", async () => {
+    const api = makeApi({
+      geo: { x: 1, y: 2, existing: LYRIC.length },
+      readBack: LYRIC + "\n" + LYRIC,
+    });
+    const r = await driveSunoLyrics(1, LYRIC, api);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/left over|too much|not cleared/i);
+  });
+
+  // A single-line lyric makes the line-count check a no-op (wantLines === 1),
+  // so the length check is the only gate — it must work in both directions.
+  it("FAILS on leftovers even for a one-line lyric", async () => {
+    const one = "just the one line";
+    const api = makeApi({
+      geo: { x: 1, y: 2, existing: 40 },
+      readBack: "some other song's words " + one,
+    });
+    const r = await driveSunoLyrics(1, one, api);
     expect(r.ok).toBe(false);
   });
 

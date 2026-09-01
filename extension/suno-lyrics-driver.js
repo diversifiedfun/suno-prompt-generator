@@ -37,6 +37,14 @@ const CHUNK = 350;
 // landed. Not 1.0: the editor normalises trailing whitespace and can collapse a
 // final blank line, which is harmless.
 const LAND_RATIO = 0.98;
+// ...and an UPPER bound, because the checks have to fail in both directions.
+// OBSERVED 2026-09-01: select-all+delete silently failed to clear the editor and
+// the insert concatenated onto what was already there — 2065 expected chars,
+// 4130 present. A lower-bound-only check calls that a clean paste. This bites
+// hardest in the multi-track flows (Set "Paste next", Album), where the field
+// always already holds the previous track. Slack above 1.0 covers the editor
+// adding a trailing newline, nothing more.
+const OVERSHOOT_RATIO = 1.05;
 
 let driving = false;
 
@@ -130,6 +138,15 @@ export function chunkLyrics(text, size = CHUNK) {
     if (cur && cur.length + line.length + 1 > size) {
       out.push(cur);
       cur = "";
+    }
+    // A single line longer than the whole chunk would otherwise sail through as
+    // one giant insert, defeating the chunking entirely — which is exactly the
+    // shape a lyric takes if something upstream already flattened its newlines.
+    // Hard-split it; there is no line boundary to be gentle about.
+    if (!cur && line.length > size) {
+      for (let i = 0; i < line.length; i += size)
+        out.push(line.slice(i, i + size));
+      continue;
     }
     cur += (cur ? "\n" : "") + line;
   }
@@ -226,23 +243,28 @@ export async function driveSunoLyrics(tabId, lyrics, api = chrome) {
         func: readLyricsText,
         args: [LYRICS_EDITABLE_SELECTORS],
       });
-      const actual = (res && res.result) || "";
-      const wantLines = text.trim().split("\n").length;
-      const gotLines = actual.trim().split("\n").length;
-      const longEnough =
-        actual.trim().length >= text.trim().length * LAND_RATIO;
+      const want = text.trim();
+      const got = ((res && res.result) || "").trim();
+      const wantLines = want.split("\n").length;
+      const gotLines = got.split("\n").length;
+      const longEnough = got.length >= want.length * LAND_RATIO;
+      const notTooMuch = got.length <= want.length * OVERSHOOT_RATIO;
       const keptBreaks = wantLines === 1 || gotLines >= wantLines * LAND_RATIO;
-      if (longEnough && keptBreaks) {
-        return { ok: true, wrote: actual.trim().length };
+      if (longEnough && notTooMuch && keptBreaks) {
+        return { ok: true, wrote: got.length };
       }
-      return {
-        ok: false,
-        error: keptBreaks
-          ? `lyrics landed short (${actual.trim().length}/${text.trim().length} chars)`
-          : `lyrics lost their line breaks (${gotLines}/${wantLines} lines)`,
-        wrote: actual.trim().length,
-        expected: text.trim().length,
-      };
+      let error;
+      if (!notTooMuch) {
+        // Almost always the previous track still sitting in the field.
+        error =
+          `lyrics left over from a previous paste ` +
+          `(${got.length} chars present, expected ${want.length}) — clear the box and retry`;
+      } else if (!keptBreaks) {
+        error = `lyrics lost their line breaks (${gotLines}/${wantLines} lines)`;
+      } else {
+        error = `lyrics landed short (${got.length}/${want.length} chars)`;
+      }
+      return { ok: false, error, wrote: got.length, expected: want.length };
     } catch {
       return { ok: false, error: "couldn't verify the lyrics landed" };
     }
