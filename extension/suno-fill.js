@@ -21,6 +21,17 @@ const LYRICS_SELECTORS = [
   'textarea[placeholder*="lyrics" i]',
   'textarea[aria-label*="lyrics" i]',
 ];
+// 2026-09-01: Suno replaced the lyrics <textarea> with a rich contenteditable.
+// None of the textarea selectors above match any more. A contenteditable cannot
+// be written with the native value setter — it needs trusted CDP input, which a
+// content script cannot send — so when we find one we report it and the side
+// panel drives it via suno-lyrics-driver.js (same route as the sliders).
+const LYRICS_EDITABLE_SELECTORS = [
+  ".lyrics-editor-content[contenteditable='true']",
+  ".lyrics-editor-content",
+  "[data-testid='lyrics-editor'] [contenteditable='true']",
+  "[contenteditable='true'][role='textbox']",
+];
 // Song-title field — best-effort only (Suno has hidden it behind an "advanced"
 // toggle before). If it's not on screen we skip it rather than fail the paste.
 const TITLE_SELECTORS = [
@@ -73,18 +84,65 @@ function sunoFillHandler(msg, _sender, sendResponse) {
     });
     return true;
   }
+  // Every field below is REPORTED, never silently skipped. The old code did
+  // `if (el && msg.lyrics) set(...)`, so when Suno's redesign removed the lyrics
+  // textarea the paste reported ok:true with an empty lyrics box and no error —
+  // exactly the silent no-op this file's header says it exists to prevent.
+  // That guard was only ever applied to the Style box; now it covers all four.
+  const filled = [];
+  const missing = [];
+
   setNativeValue(styleEl, msg.style || "");
-  if (lyricsEl && msg.lyrics) setNativeValue(lyricsEl, msg.lyrics);
+  filled.push("style");
+
+  // Lyrics: textarea if Suno still ships one, otherwise flag the contenteditable
+  // for the trusted-input driver. `needsTrustedInput` is the caller's cue.
+  let needsTrustedInput = false;
+  if (msg.lyrics) {
+    if (lyricsEl) {
+      setNativeValue(lyricsEl, msg.lyrics);
+      filled.push("lyrics");
+    } else if (findField(LYRICS_EDITABLE_SELECTORS)) {
+      needsTrustedInput = true;
+    } else {
+      missing.push("lyrics");
+    }
+  }
+
   if (msg.title) {
     const titleEl = findField(TITLE_SELECTORS);
-    if (titleEl) setNativeValue(titleEl, msg.title);
+    if (titleEl) {
+      setNativeValue(titleEl, msg.title);
+      filled.push("title");
+    } else {
+      missing.push("title");
+    }
   }
   if (msg.exclude) {
     const excludeEl = findField(EXCLUDE_SELECTORS);
-    if (excludeEl) setNativeValue(excludeEl, msg.exclude);
+    if (excludeEl) {
+      setNativeValue(excludeEl, msg.exclude);
+      filled.push("exclude");
+    } else {
+      missing.push("exclude");
+    }
   }
+
+  // Verify the writes we just made actually stuck. React can reject a value it
+  // doesn't like, and a status of "pasted" that isn't true is worse than an error.
+  const notStuck = [];
+  if (styleEl.value !== (msg.style || "")) notStuck.push("style");
+  if (lyricsEl && msg.lyrics && lyricsEl.value !== msg.lyrics)
+    notStuck.push("lyrics");
+
   styleEl.scrollIntoView({ behavior: "smooth", block: "center" });
-  sendResponse({ ok: true });
+  sendResponse({
+    ok: true,
+    filled,
+    missing,
+    notStuck,
+    needsTrustedInput,
+  });
   return true; // async-safe
 }
 

@@ -1,0 +1,221 @@
+// suno-lyrics-driver.js — writes the Lyrics field when Suno renders it as a
+// contenteditable instead of a <textarea>.
+//
+// WHY THIS EXISTS (2026-09-01): Suno replaced the lyrics <textarea> with a rich
+// editor (`div.lyrics-editor-content`). suno-fill.js's native-value-setter path
+// only works on real form controls, so after the redesign the lyrics paste
+// silently did nothing — Style filled, lyrics empty, no error. Measured against
+// the live DOM: `textarea[data-testid="lyrics-textarea"]` no longer exists.
+//
+// Every synthetic write was tried against the live editor first and FAILED:
+//   ClipboardEvent('paste') + DataTransfer  -> no-op, editor stays empty
+//   execCommand('insertText', text)         -> inserts but STRIPS every newline
+//                                              (2169 chars -> 2065, 105 lines -> 1)
+//   execCommand('insertLineBreak')          -> no-op, and DOUBLED the content
+//   execCommand('selectAll') + 'delete'     -> no-op, 4130 chars survived 6 tries
+// A lyric with no line breaks is useless to Suno, so there is no partial win.
+// Only TRUSTED input works, which is the same conclusion the sliders reached —
+// hence the same chrome.debugger (CDP) route. See suno-slider-driver.js.
+//
+// Like the slider driver, this NEVER trusts the write: it re-reads the editor
+// afterwards and only reports success if the text actually landed.
+
+// Ordered candidates for Suno's rich lyrics editor. Class first (what the live
+// DOM uses today), then structural fallbacks so a class rename doesn't kill it.
+export const LYRICS_EDITABLE_SELECTORS = [
+  ".lyrics-editor-content[contenteditable='true']",
+  ".lyrics-editor-content",
+  "[data-testid='lyrics-editor'] [contenteditable='true']",
+  "[contenteditable='true'][role='textbox']",
+];
+
+// Typing is chunked so a huge lyric can't stall one CDP call. 350 chars matches
+// what the manual keystroke path used successfully against this editor.
+const CHUNK = 350;
+
+// Fraction of the intended text that must be present afterwards to call it
+// landed. Not 1.0: the editor normalises trailing whitespace and can collapse a
+// final blank line, which is harmless.
+const LAND_RATIO = 0.98;
+
+let driving = false;
+
+// Injected via executeScript. Returns the editor's viewport geometry so CDP can
+// click it, plus what it currently holds. Self-contained — no closure, no imports.
+function collectLyricsTarget(selectors) {
+  let el = null;
+  for (const sel of selectors) {
+    el = document.querySelector(sel);
+    if (el) break;
+  }
+  if (!el) return null;
+  el.scrollIntoView({ block: "center", inline: "nearest" });
+  const b = el.getBoundingClientRect();
+  if (!b.width || !b.height) return null;
+  return {
+    // Click near the top-left of the text area rather than dead centre: a long
+    // existing lyric makes the centre land mid-document, and the caret position
+    // decides where inserted text goes.
+    x: b.left + Math.min(40, b.width / 2),
+    y: b.top + Math.min(24, b.height / 2),
+    existing: (el.innerText || "").trim().length,
+  };
+}
+
+// Injected via executeScript. Reads back what the editor actually holds.
+function readLyricsText(selectors) {
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    if (el) return el.innerText || "";
+  }
+  return null;
+}
+
+async function cdp(api, target, method, params) {
+  return await api.debugger.sendCommand(target, method, params);
+}
+
+// A trusted click to place the caret, then select-all + delete so we replace
+// rather than append. Both go through CDP; the editor ignores synthetic events.
+async function focusAndClear(api, target, geo) {
+  const base = { x: geo.x, y: geo.y, button: "left", clickCount: 1 };
+  await cdp(api, target, "Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    ...base,
+  });
+  await cdp(api, target, "Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    ...base,
+  });
+  if (!geo.existing) return;
+  // Cmd/Ctrl+A then Delete. Chrome maps metaKey on macOS and ctrlKey elsewhere;
+  // sending both modifiers in turn is simpler than sniffing the platform, and a
+  // no-op select-all is harmless.
+  for (const modifiers of [4, 2]) {
+    await cdp(api, target, "Input.dispatchKeyEvent", {
+      type: "keyDown",
+      modifiers,
+      key: "a",
+      code: "KeyA",
+      windowsVirtualKeyCode: 65,
+    });
+    await cdp(api, target, "Input.dispatchKeyEvent", {
+      type: "keyUp",
+      modifiers,
+      key: "a",
+      code: "KeyA",
+      windowsVirtualKeyCode: 65,
+    });
+  }
+  await cdp(api, target, "Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Delete",
+    code: "Delete",
+    windowsVirtualKeyCode: 46,
+  });
+  await cdp(api, target, "Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Delete",
+    code: "Delete",
+    windowsVirtualKeyCode: 46,
+  });
+}
+
+// Split on line boundaries so a chunk never severs a line mid-word — the editor
+// treats each insertText as its own edit and a split line can lose its break.
+export function chunkLyrics(text, size = CHUNK) {
+  const out = [];
+  let cur = "";
+  for (const line of String(text).split("\n")) {
+    if (cur && cur.length + line.length + 1 > size) {
+      out.push(cur);
+      cur = "";
+    }
+    cur += (cur ? "\n" : "") + line;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/**
+ * Fill Suno's contenteditable lyrics editor via trusted CDP input.
+ * Returns { ok, error?, wrote?, expected? } and never throws.
+ */
+export async function driveSunoLyrics(tabId, lyrics, api = chrome) {
+  const text = String(lyrics || "");
+  if (!text.trim()) return { ok: true, skipped: true };
+  if (driving) return { ok: false, error: "a lyrics paste is already running" };
+
+  driving = true;
+  try {
+    let geo;
+    try {
+      const [res] = await api.scripting.executeScript({
+        target: { tabId },
+        func: collectLyricsTarget,
+        args: [LYRICS_EDITABLE_SELECTORS],
+      });
+      geo = res && res.result;
+    } catch {
+      return { ok: false, error: "lyrics editor lookup failed" };
+    }
+    if (!geo) return { ok: false, error: "lyrics editor not found" };
+
+    const target = { tabId };
+    try {
+      await api.debugger.attach(target, "1.3");
+    } catch {
+      return {
+        ok: false,
+        error: "debugger attach failed (DevTools open on the tab?)",
+      };
+    }
+    try {
+      await focusAndClear(api, target, geo);
+      for (const part of chunkLyrics(text)) {
+        await cdp(api, target, "Input.insertText", { text: part });
+      }
+    } catch {
+      return { ok: false, error: "lyrics insert failed" };
+    } finally {
+      // Always detach so the "debugging this browser" banner clears.
+      try {
+        await api.debugger.detach(target);
+      } catch {
+        /* already detached / tab gone */
+      }
+    }
+
+    // Verify — the whole point. Compare what the editor holds against what we
+    // meant to write, on both length and line count, because the failure mode
+    // that bit us was text landing with every newline stripped.
+    try {
+      const [res] = await api.scripting.executeScript({
+        target: { tabId },
+        func: readLyricsText,
+        args: [LYRICS_EDITABLE_SELECTORS],
+      });
+      const actual = (res && res.result) || "";
+      const wantLines = text.trim().split("\n").length;
+      const gotLines = actual.trim().split("\n").length;
+      const longEnough =
+        actual.trim().length >= text.trim().length * LAND_RATIO;
+      const keptBreaks = wantLines === 1 || gotLines >= wantLines * LAND_RATIO;
+      if (longEnough && keptBreaks) {
+        return { ok: true, wrote: actual.trim().length };
+      }
+      return {
+        ok: false,
+        error: keptBreaks
+          ? `lyrics landed short (${actual.trim().length}/${text.trim().length} chars)`
+          : `lyrics lost their line breaks (${gotLines}/${wantLines} lines)`,
+        wrote: actual.trim().length,
+        expected: text.trim().length,
+      };
+    } catch {
+      return { ok: false, error: "couldn't verify the lyrics landed" };
+    }
+  } finally {
+    driving = false;
+  }
+}
