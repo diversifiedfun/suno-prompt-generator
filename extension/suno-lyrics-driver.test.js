@@ -42,13 +42,23 @@ const LYRIC =
   "[Intro]\nKeep going\nI'm listening\n\n[Verse 1]\nYou're on the part now";
 
 describe("chunkLyrics", () => {
-  it("never splits a line across chunks", () => {
+  // 🔴 The invariant that matters is what the DRIVER produces: it inserts the
+  // chunks back to back with no separator. The first version of this test
+  // asserted join("\n"), which validated the splitter while the driver was
+  // silently fusing the lines either side of every boundary (40 lines -> 36).
+  it("rejoins with NO separator to exactly the original — what the driver does", () => {
     const text = Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n");
     const parts = chunkLyrics(text, 60);
     expect(parts.length).toBeGreaterThan(1);
-    // Rejoining must reproduce the original exactly — no lost or halved lines.
-    expect(parts.join("\n")).toBe(text);
-    for (const p of parts) expect(p.length).toBeLessThanOrEqual(60 + 10);
+    expect(parts.join("")).toBe(text);
+    expect(parts.join("").split("\n").length).toBe(40);
+    for (const p of parts) expect(p.length).toBeLessThanOrEqual(60);
+  });
+
+  it("preserves blank lines between sections across a boundary", () => {
+    const text = "[Verse]\na\nb\n\n[Chorus]\nc\nd\n\n[Bridge]\ne";
+    const parts = chunkLyrics(text, 12);
+    expect(parts.join("")).toBe(text);
   });
 
   // A lyric whose newlines were already stripped upstream is ONE huge line —
@@ -66,13 +76,15 @@ describe("chunkLyrics", () => {
   // arriving AFTER a buffered short one still splits, because a line longer than
   // `size` always trips the flush first. Verified rather than assumed.
   it("hard-splits a long line even when a short line is buffered", () => {
-    const parts = chunkLyrics("short line\n" + "x".repeat(1000), 350);
+    const src = "short line\n" + "x".repeat(1000);
+    const parts = chunkLyrics(src, 350);
     for (const p of parts) expect(p.length).toBeLessThanOrEqual(350);
-    expect(parts[0]).toBe("short line");
+    expect(parts.join("")).toBe(src);
   });
 
   it("keeps a single short lyric in one chunk", () => {
     expect(chunkLyrics("a\nb", 350)).toEqual(["a\nb"]);
+    expect(chunkLyrics("a\nb", 350).join("")).toBe("a\nb");
   });
 });
 
@@ -228,5 +240,53 @@ describe("collectPasteProblems", () => {
     const api = makeApi({ readBack: LYRIC });
     expect(await collectPasteProblems(1, { ok: true }, LYRIC, api)).toEqual([]);
     expect(await collectPasteProblems(1, undefined, LYRIC, api)).toEqual([]);
+  });
+});
+
+describe("verification bounds", () => {
+  const mk = (want, readBack) => ({
+    scripting: {
+      executeScript: async (o) => [
+        {
+          result:
+            o.func.name === "readLyricsText"
+              ? readBack
+              : { x: 1, y: 2, existing: want.length },
+        },
+      ],
+    },
+    debugger: {
+      attach: async () => {},
+      detach: async () => {},
+      sendCommand: async () => {},
+    },
+  });
+
+  // A pure 5% ratio left ~103 chars of headroom at real song length — enough to
+  // hide a whole leftover LINE of the previous track. The absolute cap closes it.
+  it("rejects a partial leftover that a pure ratio would have passed", async () => {
+    const want = "L".repeat(2065);
+    const got = "leftover chorus line from the last song" + want; // +39
+    expect(got.length).toBeLessThan(want.length * 1.05); // ratio alone: passes
+    const r = await driveSunoLyrics(1, want, mk(want, got));
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/left over/);
+  });
+
+  it("still accepts a clean write at song length", async () => {
+    const want = "L".repeat(2065);
+    const r = await driveSunoLyrics(1, want, mk(want, want));
+    expect(r.ok).toBe(true);
+  });
+
+  // Both defects at once: the leftover message must not bury the line-break loss,
+  // because "clear the box and retry" is wrong advice for a flattening bug.
+  it("reports BOTH failures when both trip", async () => {
+    const want = Array.from({ length: 100 }, () => "abcdefghijklmnopqrstuvwxyz").join("\n");
+    const got = "x".repeat(want.length + 400).replace(/x{60}/g, (m) => m + "\n");
+    const r = await driveSunoLyrics(1, want, mk(want, got));
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/line breaks/);
+    expect(r.error).toMatch(/left over/);
   });
 });

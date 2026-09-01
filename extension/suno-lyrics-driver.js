@@ -42,9 +42,21 @@ const LAND_RATIO = 0.98;
 // the insert concatenated onto what was already there — 2065 expected chars,
 // 4130 present. A lower-bound-only check calls that a clean paste. This bites
 // hardest in the multi-track flows (Set "Paste next", Album), where the field
-// always already holds the previous track. Slack above 1.0 covers the editor
-// adding a trailing newline, nothing more.
+// always already holds the previous track.
+//
+// A pure ratio is the wrong shape on its own: it grows with the lyric, so at a
+// real song length of 2065 chars a 5% ceiling leaves ~103 chars of headroom —
+// room for a whole leftover LINE of the previous track to pass as clean. The
+// realistic failure of a flaky select-all is a partial leftover, not the total
+// duplication the ratio easily catches. So the allowance is also capped in
+// absolute terms, well under one lyric line.
+//
+// (An earlier comment here claimed the slack covered an editor-added trailing
+// newline. It never did — `got` is trimmed before the comparison, so trailing
+// whitespace contributes zero. The slack only ever covered editor quirks that
+// genuinely lengthen the text mid-body.)
 const OVERSHOOT_RATIO = 1.05;
+const OVERSHOOT_ABS = 12;
 
 let driving = false;
 
@@ -131,11 +143,23 @@ async function focusAndClear(api, target, geo) {
 
 // Split on line boundaries so a chunk never severs a line mid-word — the editor
 // treats each insertText as its own edit and a split line can lose its break.
+//
+// 🔴 INVARIANT: `chunkLyrics(t).join("") === t`. The driver inserts each chunk
+// back to back with NO separator, so every chunk must CARRY its own trailing
+// newline. The first version split on "\n" and dropped it, which silently fused
+// the lines either side of every boundary — a 40-line lyric came back 36 lines.
+// The unit test asserted `join("\n") === text`, which validated the splitter but
+// not what the caller actually does with the pieces, so it passed. Test the
+// artifact the user gets, not the intermediate.
 export function chunkLyrics(text, size = CHUNK) {
+  const src = String(text);
+  const lines = src.split("\n");
   const out = [];
   let cur = "";
-  for (const line of String(text).split("\n")) {
-    if (cur && cur.length + line.length + 1 > size) {
+  for (let i = 0; i < lines.length; i++) {
+    // The separator belongs to the piece, so concatenation is lossless.
+    const piece = lines[i] + (i < lines.length - 1 ? "\n" : "");
+    if (cur && cur.length + piece.length > size) {
       out.push(cur);
       cur = "";
     }
@@ -143,12 +167,12 @@ export function chunkLyrics(text, size = CHUNK) {
     // one giant insert, defeating the chunking entirely — which is exactly the
     // shape a lyric takes if something upstream already flattened its newlines.
     // Hard-split it; there is no line boundary to be gentle about.
-    if (!cur && line.length > size) {
-      for (let i = 0; i < line.length; i += size)
-        out.push(line.slice(i, i + size));
+    if (!cur && piece.length > size) {
+      for (let j = 0; j < piece.length; j += size)
+        out.push(piece.slice(j, j + size));
       continue;
     }
-    cur += (cur ? "\n" : "") + line;
+    cur += piece;
   }
   if (cur) out.push(cur);
   return out;
@@ -248,22 +272,30 @@ export async function driveSunoLyrics(tabId, lyrics, api = chrome) {
       const wantLines = want.split("\n").length;
       const gotLines = got.split("\n").length;
       const longEnough = got.length >= want.length * LAND_RATIO;
-      const notTooMuch = got.length <= want.length * OVERSHOOT_RATIO;
+      const ceiling = Math.min(
+        want.length * OVERSHOOT_RATIO,
+        want.length + OVERSHOOT_ABS,
+      );
+      const notTooMuch = got.length <= ceiling;
       const keptBreaks = wantLines === 1 || gotLines >= wantLines * LAND_RATIO;
       if (longEnough && notTooMuch && keptBreaks) {
         return { ok: true, wrote: got.length };
       }
-      let error;
-      if (!notTooMuch) {
-        // Almost always the previous track still sitting in the field.
-        error =
-          `lyrics left over from a previous paste ` +
-          `(${got.length} chars present, expected ${want.length}) — clear the box and retry`;
-      } else if (!keptBreaks) {
-        error = `lyrics lost their line breaks (${gotLines}/${wantLines} lines)`;
-      } else {
-        error = `lyrics landed short (${got.length}/${want.length} chars)`;
-      }
+      // Report EVERY failed check, not just the first. Ordering used to decide
+      // which one the user saw, and the leftover branch would bury "lost their
+      // line breaks" — the original defect this whole file exists to catch, and
+      // the one where "clear the box and retry" is actively wrong advice.
+      const reasons = [];
+      if (!keptBreaks)
+        reasons.push(`lost their line breaks (${gotLines}/${wantLines} lines)`);
+      if (!notTooMuch)
+        reasons.push(
+          `left over from a previous paste (${got.length} chars present, ` +
+            `expected ${want.length}) — clear the box and retry`,
+        );
+      if (!longEnough)
+        reasons.push(`landed short (${got.length}/${want.length} chars)`);
+      const error = `lyrics ${reasons.join("; and ")}`;
       return { ok: false, error, wrote: got.length, expected: want.length };
     } catch {
       return { ok: false, error: "couldn't verify the lyrics landed" };
